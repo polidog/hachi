@@ -77,6 +77,19 @@ class MicStream(private val onChunk: (ByteArray) -> Unit) {
     }
 }
 
+/** The loudest sample in a PCM16 chunk, 0..32767. Silence from a dead microphone reads as 0. */
+fun loudest(pcm: ByteArray): Int {
+    var peak = 0
+    var i = 0
+    while (i + 1 < pcm.size) {
+        val sample = ((pcm[i + 1].toInt() shl 8) or (pcm[i].toInt() and 0xFF)).toShort().toInt()
+        val magnitude = if (sample == Short.MIN_VALUE.toInt()) Short.MAX_VALUE.toInt() else kotlin.math.abs(sample)
+        if (magnitude > peak) peak = magnitude
+        i += 2
+    }
+    return peak
+}
+
 /**
  * Plays the 24 kHz PCM16 the model streams back, with [flush] for barge-in.
  *

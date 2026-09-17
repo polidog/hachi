@@ -74,7 +74,14 @@ class GeminiLiveClient(
                 listener.onClosed(t.message ?: response?.message)
             }
 
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                // The server closing first only reaches onClosed if the close is acknowledged.
+                Log.i(TAG, "live socket closing: $code ${reason.ifBlank { "(no reason)" }}")
+                webSocket.close(1000, null)
+            }
+
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                Log.i(TAG, "live socket closed: $code ${reason.ifBlank { "(no reason)" }}")
                 ready = false
                 listener.onClosed(reason.ifBlank { "closed ($code)" })
             }

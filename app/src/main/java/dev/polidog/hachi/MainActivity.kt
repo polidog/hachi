@@ -190,6 +190,9 @@ class MainActivity : Activity(), Conversation.Ui {
 
     override fun onPause() {
         super.onPause()
+        // A conversation cut short by the screen going elsewhere looks exactly like one the server
+        // dropped, unless this says which it was.
+        if (conversation?.active == true) android.util.Log.i("Hachi", "paused while talking")
         conversation?.stop()
         weather.stop()
     }

@@ -40,7 +40,22 @@ class Conversation(
     // transcribes it as the user, and answers its own reply.
     // ponytail: costs barge-in. Tapping the screen hushes the reply instead; a real software AEC
     // (WebRTC AudioProcessing) is the upgrade path if talking over Hachi turns out to matter.
-    private val mic = MicStream { pcm -> if (!speaker.busy()) client?.sendAudio(pcm) }
+    // Counted rather than logged per chunk: what matters afterwards is whether the microphone was
+    // delivering anything at all, and whether the half-duplex gate was what swallowed it.
+    private var sent = 0
+    private var gated = 0
+    // The chunk counter cannot tell a microphone that is delivering a voice from one delivering
+    // zeros, and both look identical from the model's silence. The loudest sample of each second is
+    // what separates them.
+    private var peak = 0
+    private val mic = MicStream { pcm ->
+        peak = maxOf(peak, loudest(pcm))
+        if (speaker.busy()) gated++ else { sent++; client?.sendAudio(pcm) }
+        if ((sent + gated) % 50 == 0) {
+            Log.i(TAG, "mic level: peak=$peak of 32767")
+            peak = 0
+        }
+    }
     private var client: GeminiLiveClient? = null
     private var stopped = false
     private val silenceTimer = Runnable { stop() }
@@ -135,6 +150,7 @@ class Conversation(
 
     fun stop() {
         if (stopped && client == null) return
+        Log.i(TAG, "conversation ending: ${sent * 20}ms sent, ${gated * 20}ms gated by the speaker")
         stopped = true
         main.removeCallbacks(silenceTimer)
         mic.stop()
