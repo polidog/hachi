@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>テストアーキテクチャ規約</title>
+<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900">
+  <main class="mx-auto max-w-4xl px-6 py-10">
+    <article id="doc" class="prose prose-slate dark:prose-invert max-w-none"></article>
+  </main>
+  <!-- 正規データ（機械可読）: 本文の Markdown ソース。編集はこのブロックを更新する -->
+  <script type="text/markdown" id="doc-source">
+# テストアーキテクチャ規約
+
+> 最終更新: 2026-09-17
+
+## テスト戦略
+
+**壊れたときに気づくためだけに書く。** 仕様書としては使わないし、カバレッジも追わない。
+
+対象は「間違っていても黙って間違う」ロジックに絞る。料金の計算や色の補間は、狂っても画面にはもっともらしい数字と色が出るので、動かして眺めても気づけない。一方で会話が始まらない・音が出ない・ボタンが効かないといった不具合は実機で 5 秒触れば分かるので、テストは書かない。
+
+端末は 1 台しかなく、音声まわりの問題は結局その実機でしか再現しない。JVM で回せないものを無理に JVM へ持ち込まない。
+
+## テストスコープ
+
+| コード種別 | テスト種別 | 備考 |
+|-----------|-----------|------|
+| 料金計算 (`Usage`) | JVM 単体テスト | 差分課金・モダリティ別単価・内訳に出ない分の計上 |
+| 色の補間 (`DayPalette`) | JVM 単体テスト | キーフレーム一致・中間値・日跨ぎの折り返し・不透明性 |
+| レスポンス解釈（Gemini / 天気 / HA / Immich） | JVM 単体テスト | 実際に受け取った JSON を文字列で持ち、解釈部分だけ検証 |
+| 通信そのもの | 書かない | 実際に叩いて確かめる。MockWebServer は入れない |
+| View・Activity | 書かない | 実機で手動確認 |
+| 音声 I/O (`AudioIo`) | 書かない | AEC もエコーも実機でしか再現しない |
+| 設定の保管 (`Settings`) | 書かない | Keystore は実機依存 |
+
+## フレームワーク
+
+| 種別 | ツール | 実行コマンド |
+|------|-------|------------|
+| JVM 単体テスト | JUnit 4 | `mise exec -- ./gradlew testDebugUnitTest` |
+| ビルド + テスト | — | `mise exec -- ./gradlew testDebugUnitTest assembleDebug` |
+| 実機へ配る | — | `adb -s <SERIAL> install -r app/build/outputs/apk/debug/app-debug.apk` |
+
+Robolectric も androidTest も入れていない。ただし **Phase 1 のウェイクワード検証では androidTest を入れる**（録音した音声を流し込んで検出率を測る必要があり、butler も同じ形を取っている）。そのとき以外は増やさない。
+
+`android.jar` のスタブは `JSONObject` を触ると "not mocked" を投げるので、JVM テストには `testImplementation("org.json:json")` で実装を入れてある。
+
+## モック方針
+
+- **外部 HTTP**: モックしない。叩かない。レスポンスの**解釈**だけを固定 JSON でテストする
+- **時刻**: モックしない。時刻に依存するロジック（`DayPalette`）は分を引数で受け取るので、テストから直接値を渡せる
+- **Android SDK**: モックしない。SDK に触るコードはテスト対象から外す
+
+テスト対象の関数は SDK に触らない純粋関数として切り出す。`Usage.newSpend()` がその例で、`Context` を持つ `Usage` クラスから計算部分だけをトップレベル関数として出してある。**テストを書きたくなったら、まずその部分を純粋関数にできないかを見る。**
+
+## テストデータ戦略
+
+factory も fixture も使わない。テストの中にリテラルで書く。
+
+実サービスのレスポンスを検証する場合は、**実際に受け取ったものをそのまま**テストに貼る（`UsageTest` の 599 トークンの例は実機のログから取った値）。想像で作った JSON は、想像どおりの形しか検証しない。
+
+## ファイル配置
+
+`app/src/test/java/dev/polidog/hachi/` に、対象と同じ名前 + `Test`。
+
+```
+app/src/test/java/dev/polidog/hachi/
+├── UsageTest.kt
+└── DayPaletteTest.kt
+```
+
+## CI
+
+なし。手元で `./gradlew testDebugUnitTest` を通してからコミットする。端末が 1 台の個人プロジェクトで、CI を組む前に実機で動かすほうが速い。
+
+## 注意事項
+
+- **テストが通ることと、実機で動くことは別。** 特に音声は、ビルドが通ってテストが緑でも端末で自分の声を拾い続けることがある（実際にあった）。音に触る変更は必ず実機で喋って確かめる
+- **料金の計算を変えたらテストを先に直す。** 過小計上は気づけない種類のバグで、気づくのは請求書が来たとき
+- 検証していない仮定はコードに `ponytail:` コメントで残す（例: `usageMetadata` が累計か差分かは未確定）
+  </script>
+  <script>
+    document.getElementById('doc').innerHTML =
+      marked.parse(document.getElementById('doc-source').textContent.trim());
+  </script>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>アーキテクチャ規約</title>
+<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900">
+  <main class="mx-auto max-w-4xl px-6 py-10">
+    <article id="doc" class="prose prose-slate dark:prose-invert max-w-none"></article>
+  </main>
+  <!-- 正規データ（機械可読）: 本文の Markdown ソース。編集はこのブロックを更新する -->
+  <script type="text/markdown" id="doc-source">
+# アーキテクチャ規約
+
+> 最終更新: 2026-09-17
+
+Hachi は Echo Show 5 (2nd gen) の LineageOS 上で動く、常時待受の音声 AI アシスタント。Gemini Live API と会話し、天気・Home Assistant・Spotify・フォトフレームを兼ねる壁掛けディスプレイになる。サーバーは持たず、端末から各サービスへ直接つなぐ。
+
+## 技術スタック
+
+| カテゴリ | 採用技術 | バージョン |
+|---------|---------|----------|
+| 言語 | Kotlin | 2.1.20 |
+| ビルド | Android Gradle Plugin / Gradle | 8.9.2 / 8.11.1 |
+| JDK | Temurin (mise 管理) | 17 |
+| SDK | compileSdk / targetSdk / minSdk | 35 / 35 / 30 |
+| ABI | armeabi-v7a のみ | — |
+| UI | Android ネイティブ View（Compose・AndroidX は不使用） | — |
+| HTTP / WebSocket | OkHttp | 4.12.0 |
+| JSON | `org.json`（Android 同梱） | — |
+| 音声会話 | Gemini Live API (BidiGenerateContent over WebSocket) | v1beta |
+| テスト | JUnit4 + `org.json:json`（JVM のみ） | 4.13.2 / 20240303 |
+
+AndroidX も Compose も入れていない。API 30 の端末 1 台だけを対象にしており、素の View で足りる範囲しか作らないため、依存とビルド時間を増やす理由がない。
+
+## ディレクトリ全体図
+
+```
+app/src/main/java/dev/polidog/hachi/
+├── MainActivity.kt          # ホーム画面。時計・各ボタン・会話オーバーレイを載せる
+├── SettingsActivity.kt      # 設定（左に項目・右に中身のマスター/ディテール）
+├── ClockView.kt             # 時計と空のグラデーション描画
+├── DayPalette.kt            # 時刻 → 空の色（キーフレーム補間）
+├── ConversationView.kt      # 会話中のオーバーレイ（字幕・終了ボタン）
+├── Ui.kt                    # dp 変換・共通色・pill 背景
+├── Conversation.kt          # 1 回の会話。マイク/スピーカー/クライアントの配線
+├── GeminiLiveClient.kt      # Live API の WebSocket プロトコル
+├── AudioIo.kt               # AudioRecord / AudioTrack、ハーフデュプレックスの判定
+├── Settings.kt              # SharedPreferences + Keystore による秘密情報の保管
+├── Usage.kt                 # usageMetadata からの料金計上と日次上限
+├── ModelCatalog.kt          # ListModels から Live 対応モデルを取得
+└── tools/                   # (Phase 3〜) Gemini の function calling で公開する道具
+app/src/test/java/dev/polidog/hachi/
+├── UsageTest.kt
+└── DayPaletteTest.kt
+app/src/main/res/
+├── values/ values-ja/       # 文字列（UI と会話の言語は端末ロケールに従う）
+├── drawable/                # アイコン（VectorDrawable）
+└── ...
+docs/
+├── architecture.html        # この文書
+└── test-architecture.html
+```
+
+## アーキテクチャ方針
+
+**レイヤを切らず、役割ごとの 1 ファイルで構成する。** ファイル数が 15 本前後の規模でパッケージを分けても、境界の維持コストのほうが上回る。切り出すのは `tools/` だけ（後述）。
+
+**Activity は表示だけを持つ。** `MainActivity` は `Conversation.Ui` を実装して字幕と状態を描くだけで、音声も WebSocket も触らない。会話の制御は `Conversation` が持ち、Phase 1 で Foreground Service へ移す（下記）。
+
+**外部サービスごとに 1 クライアント。** Gemini、Home Assistant、Open-Meteo、Immich はそれぞれ独立したクラスが HTTP を話し、アプリ内の型に変換して返す。共通の HTTP 抽象は作らない。
+
+**端末は 1 台しかない。** 画面サイズ（960x480）・ABI・Android バージョンを分岐で吸収する必要がないので、汎用化はしない。
+
+## モジュール境界と依存方向
+
+依存は上から下へ一方向に流れる。
+
+```
+Activity / View  ──▶  Conversation  ──▶  GeminiLiveClient / AudioIo
+                              │
+                              └────────▶  tools/*  ──▶  各サービスのクライアント
+                                              │
+Settings / Usage  ◀───────────────────────────┘
+```
+
+- **View は `Conversation` より下を知らない。** `MainActivity` が `GeminiLiveClient` や `AudioIo` を直接触ることはない
+- **`tools/` は UI を知らない。** 道具は引数の JSON を受け取り結果の JSON を返すだけで、画面や Activity に触らない。画面の切り替えが要る操作は、`Conversation` が結果を見て UI に伝える
+- **`Settings` / `Usage` はどこからでも読んでよい。** どちらも SharedPreferences の薄いラッパで、状態を持たない
+- **逆流を作らない。** `GeminiLiveClient` が `Conversation` を呼ぶことはなく、リスナ経由で通知するだけ
+
+### tools/ の規約
+
+Gemini の function calling で公開する道具は `tools/` にまとめる。理由は数が増えるのが分かっているから（時刻・天気・Home Assistant 操作・機器の状態・機器一覧・音楽操作…）。1 道具 1 ファイルで、宣言（`FunctionDeclaration` の JSON）と実行を同じファイルに置く。登録は `tools/ToolRegistry.kt` が一括で行い、`Conversation` はレジストリ越しにしか道具を知らない。
+
+## 音声パイプラインとハーフデュプレックス制約
+
+```
+マイク  ──▶ AudioRecord (16 kHz PCM16)
+              │
+              ├── speaker.busy() が true の間は破棄  ◀── ここが要
+              │
+              └──▶ realtimeInput (base64) ──▶ Gemini Live
+                                                   │
+        AudioTrack (24 kHz PCM16) ◀── inlineData ◀──┘
+```
+
+**この端末にはエコーキャンセラが存在しない。** `audio_effects.xml` に `aec` / `ns` のエフェクトが登録されておらず（`libaudiopreprocessing.so` はあるが宣言がコメントアウトされたまま）、`AcousticEchoCanceler.isAvailable()` は false を返す。マイクはスピーカーの音をそのまま拾うため、何もしないとモデルが自分の声をユーザー発話として文字起こしし、自分の返答に返答し続ける。
+
+対策として**スピーカーが鳴っている間はマイクの音を一切送らない**（`AudioIo.kt` の `SpeakerStream.busy()`）。判定は AudioTrack の内部状態を見ず、「渡した音声が鳴り終わる実時刻」を自前で持つ。`playbackHeadPosition` は `flush()` でリセットされる保証がなく、一度割り込みが起きると判定が壊れたまま戻らないため。鳴り終わってからの余白は 600 ms（部屋の残響と AudioTrack 自体のバッファ遅延の両方を吸う）。
+
+**代償として喋りかぶせ（barge-in）はできない。** 代わりに画面タップで再生中の返答を捨てる（`Conversation.hush()`）。ソフトウェア AEC（WebRTC AudioProcessing）を積むのが上位互換だが、割り込みが本当に必要と分かるまでは入れない。
+
+## エラーハンドリング
+
+**壁に掛けっぱなしの端末なので、アプリを落とさないことを最優先する。**
+
+- 外部 I/O（HTTP・WebSocket・音声デバイス）の失敗は捕まえて `Log` に出し、必要なら Toast で伝える。機能が 1 つ死んでもアプリは生き残る
+- 復旧できない状態は「未設定」に倒す。例: Keystore の鍵が失われて API キーを復号できないとき、`Settings.secret()` は例外を投げず空文字を返す（起動のたびにクラッシュするより、設定画面で入れ直せるほうがよい）
+- 解釈できないサーバーメッセージは捨てて先に進む（`GeminiLiveClient.handle()`）
+- `Result` 型や独自の sealed class は導入しない。コールバック中心の今の形と相性が悪い
+
+ログのタグは全ファイル共通で `Hachi`。`adb logcat -s Hachi` で追える。
+
+## 設定と秘密情報
+
+- すべて 1 つの SharedPreferences (`settings`) に入れる。読み書きは `Settings` 経由のみ
+- **秘密情報は `secret()` / `setSecret()` を必ず使う。** Android Keystore の AES/GCM 鍵で暗号化し、`<Base64 IV>:<Base64 暗号文>` の形で保存する。API キー・アクセストークンを平文で `set()` しない
+- 変更は即座に保存する（設定画面に「適用」はない）
+- `allowBackup=false`。鍵を端末外に出さない
+
+## 料金計上
+
+Live API がセッション中に送る `usageMetadata` のトークン数から積算する。Cloud Billing は数時間遅れるので参照しない。
+
+- 届くたびにモダリティ別（TEXT / AUDIO / IMAGE / VIDEO）の単価を掛け、**日次と月次のドル額**に足す。トークン数は保存せず金額だけ持つので、月の途中でモデルを変えても合算が狂わない
+- カウントは**セッション累計**として扱い、前回との差分だけ課金する（要検証: 差分報告だった場合は過小計上になる。生の `usageMetadata` をログに出してある）
+- **内訳に現れない分と `thoughtsTokenCount` も必ず計上する。** どちらも実測で漏れが見つかった。見積もりが実際より低く出るほうが害が大きいので、不明分は高いほうに倒す
+- 日次上限に達したら会話を始めさせず、会話中に超えたらその場で終了する
+
+## 端末固有の制約
+
+| 制約 | 内容 |
+|------|------|
+| 機種 | Echo Show 5 (2nd gen) / コードネーム `cronos` |
+| OS | LineageOS 18.1 (Android 11 / API 30) |
+| ABI | armeabi-v7a（32bit）。ネイティブライブラリは必ずこれを含める |
+| 画面 | 960x480 横固定、density 195 |
+| エコーキャンセラ | **なし**（上記「音声パイプライン」参照） |
+| HOME 候補 | マニフェストに HOME インテントフィルタを持つが、既定ランチャーは自動で変更しない |
+
+## 今後の Phase
+
+| Phase | 内容 | 状態 |
+|-------|------|------|
+| 0 | 骨組みと時計 | 完了 |
+| 2 | Gemini Live 会話・料金計上・設定画面 | 完了 |
+| 1 | ウェイクワード常時待受（Julius の成果物を butler から流用）。**会話と検出を Foreground Service に移し、Activity は表示だけにする** | 未着手 |
+| 3 | 道具: 時刻 / 天気 (Open-Meteo) / Home Assistant 操作・状態取得 / Spotify (HA の `media_player` 経由) | 未着手 |
+| 4 | ホーム画面のページャ（時計・天気・スマートホーム・音楽・フォト） | 未着手 |
+| 5 | Immich フォトフレーム | 未着手 |
+
+Google フォトは選択肢から外した。`photoslibrary.readonly` が 2025-03-31 に廃止され、フォトフレーム向けの Ambient API はパートナー審査が前提で、一般開発者に残る Picker API では自動更新ができないため。
+  </script>
+  <script>
+    document.getElementById('doc').innerHTML =
+      marked.parse(document.getElementById('doc-source').textContent.trim());
+  </script>
+</body>
+</html>
