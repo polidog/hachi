@@ -10,21 +10,22 @@ import android.os.Looper
 import android.view.View
 import kotlin.concurrent.thread
 import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /**
  * Home page 2: the rain radar over a map, centred on the configured place.
  *
- * Tiles are drawn at their native size rather than scaled to the display's density. The default zoom
- * is deliberately wide: at zoom 9 the whole viewport around Miyazaki came back as empty tiles while
- * a rain band sat just outside it, which is exactly the thing this page exists to show. Tapping
- * cycles in for detail.
+ * Tiles are drawn at their native size rather than scaled to the display's density. Tapping cycles
+ * the zoom, which is remembered, and the width of the view in kilometres is drawn beside the
+ * attribution so the scale is never a guess.
  *
  * Only the current frame is shown. The nowcast also publishes the past and the next hour at
  * five-minute steps, which would animate; that means holding twenty-odd frames' worth of tiles, so
  * it waits until someone wants it.
  */
-class RadarPage(context: Context) : View(context) {
+class RadarPage(context: Context, private val settings: Settings) : View(context) {
     private val tiles = RadarTiles(context)
     private val main = Handler(Looper.getMainLooper())
 
@@ -33,7 +34,8 @@ class RadarPage(context: Context) : View(context) {
     private var rain = mutableMapOf<Pair<Int, Int>, Bitmap>()
     private var loading = false
     private var failed = false
-    private var zoom = DEFAULT_ZOOM
+    private var zoom = settings.get("radarZoom").toIntOrNull()?.coerceIn(MIN_ZOOM, MAX_ZOOM)
+        ?: DEFAULT_ZOOM
 
     private val marker = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(0xE8, 0x5A, 0x4A) }
     private val markerRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -54,7 +56,8 @@ class RadarPage(context: Context) : View(context) {
 
     init {
         setOnClickListener {
-            zoom = if (zoom >= MAX_ZOOM) DEFAULT_ZOOM else zoom + 1
+            zoom = if (zoom >= MAX_ZOOM) MIN_ZOOM else zoom + 1
+            settings.set("radarZoom", zoom.toString())
             base.clear()
             rain.clear()
             invalidate()
@@ -148,8 +151,9 @@ class RadarPage(context: Context) : View(context) {
         canvas.drawCircle(width / 2f, height / 2f, dp(5).toFloat(), marker)
         canvas.drawCircle(width / 2f, height / 2f, dp(5).toFloat(), markerRing)
 
-        // Both sources require attribution.
-        val text = context.getString(R.string.radar_credit)
+        // Both sources require attribution; the scale rides along with it.
+        val text = context.getString(R.string.radar_scale, spanKm(width, zoom, centre.latitude)) +
+            "  ·  " + context.getString(R.string.radar_credit)
         val textWidth = credit.measureText(text)
         val pad = dp(4).toFloat()
         canvas.drawRect(
@@ -162,9 +166,28 @@ class RadarPage(context: Context) : View(context) {
     private fun dp(value: Int) = context.dp(value)
 
     private companion object {
-        /** About 500 km across on this screen: wide enough to see weather that has not arrived yet. */
-        const val DEFAULT_ZOOM = 8
-        const val MAX_ZOOM = 10
+        /**
+         * About 120 km across on this screen at Japanese latitudes -- a city and the weather on its
+         * way to it. Wider than this and home is a dot; closer and rain arrives with no warning.
+         */
+        const val DEFAULT_ZOOM = 10
+        const val MIN_ZOOM = 8
+        const val MAX_ZOOM = 12
         const val TILE = 256
     }
+}
+
+/**
+ * How wide [widthPx] is on the ground at [zoom] and [latitude], in kilometres, rounded to something
+ * worth saying.
+ *
+ * The Web Mercator resolution formula is already per pixel of a 256-pixel tile, so the tile size
+ * must not appear in it again -- dividing by it a second time reported a 120 km view as "0 km".
+ */
+internal fun spanKm(widthPx: Int, zoom: Int, latitude: Double): Int {
+    val metresPerPixel = 156543.03392 * cos(Math.toRadians(latitude)) / (1 shl zoom)
+    val km = widthPx * metresPerPixel / 1000.0
+    // 10 km steps. Every zoom this page offers lands near a round figure anyway -- 480, 240, 120,
+    // 60, 30 -- and "119 km" would be false precision on a map read from across the room.
+    return (km / 10).roundToInt() * 10
 }

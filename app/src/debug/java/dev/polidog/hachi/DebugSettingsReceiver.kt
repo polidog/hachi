@@ -49,7 +49,7 @@ class DebugSettingsReceiver : BroadcastReceiver() {
         val PLAIN = setOf(
             "model", "voice", "silenceTimeout", "dailyCap",
             "weatherPlace", "weatherLat", "weatherLon",
-            "homeAssistantUrl", "immichUrl", "immichAlbum", "debugScene",
+            "homeAssistantUrl", "immichUrl", "immichAlbum", "debugScene", "radarZoom",
         )
     }
 }

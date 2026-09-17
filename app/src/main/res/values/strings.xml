@@ -71,4 +71,5 @@
     <string name="radar_loading">Loading the radar…</string>
     <string name="radar_unavailable">Could not load the radar.</string>
     <string name="radar_credit">JMA Nowcast · GSI Tiles</string>
+    <string name="radar_scale">%1$d km across</string>
 </resources>

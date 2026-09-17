@@ -55,7 +55,7 @@ class MainActivity : Activity(), Conversation.Ui {
         }
 
         weatherPage = WeatherPage(this)
-        radarPage = RadarPage(this)
+        radarPage = RadarPage(this, settings)
         sky = SkyView(this)
         dots = TextView(this).apply {
             setTextColor(Color.argb(0x8A, 0xFA, 0xF6, 0xEC))

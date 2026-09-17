@@ -1,6 +1,7 @@
 package dev.polidog.hachi
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TileMathTest {
@@ -31,5 +32,29 @@ class TileMathTest {
         val y = tileY(35.6812, 8)
         assertEquals(x * 2, tileX(139.7671, 9), 1e-9)
         assertEquals(y * 2, tileY(35.6812, 9), 1e-9)
+    }
+}
+
+class RadarScaleTest {
+    @Test
+    fun aScreenWidthIsMeasuredInRealKilometres() {
+        // 960 px at zoom 10 near Tokyo is about 120 km: the device's own screen, at the default zoom.
+        assertEquals(120, spanKm(960, 10, 35.47))
+        // Each level out doubles the ground covered.
+        assertEquals(240, spanKm(960, 9, 35.47))
+        assertEquals(480, spanKm(960, 8, 35.47))
+        // And each level in halves it.
+        assertEquals(60, spanKm(960, 11, 35.47))
+        assertEquals(30, spanKm(960, 12, 35.47))
+    }
+
+    @Test
+    fun theSameZoomCoversMoreGroundNearTheEquator() {
+        assertTrue(spanKm(960, 10, 0.0) > spanKm(960, 10, 60.0))
+    }
+
+    @Test
+    fun aZeroWidthViewDoesNotThrow() {
+        assertEquals(0, spanKm(0, 10, 35.47))
     }
 }
