@@ -4,6 +4,8 @@
     <string name="settings_api_key">Gemini API キー</string>
     <string name="settings_save">保存</string>
     <string name="settings_saved">保存しました</string>
+    <string name="settings_daily_cap">1日の上限（USD、0 で無制限）</string>
+    <string name="error_daily_cap">本日の上限 $%1$s に達しました。</string>
     <string name="error_no_api_key">先に設定で Gemini API キーを入力してください。</string>
     <string name="state_connecting">接続中…</string>
     <string name="state_listening">どうぞ</string>

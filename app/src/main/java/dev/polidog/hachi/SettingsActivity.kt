@@ -21,10 +21,16 @@ class SettingsActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
             setText(settings.geminiKey)
         }
+        val cap = EditText(this).apply {
+            hint = getString(R.string.settings_daily_cap)
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(settings.get("dailyCap", Settings.DEFAULT_DAILY_CAP))
+        }
         val save = Button(this).apply {
             text = getString(R.string.settings_save)
             setOnClickListener {
                 settings.setSecret("geminiKey", key.text.toString().trim())
+                settings.set("dailyCap", cap.text.toString().trim().ifBlank { "0" })
                 Toast.makeText(this@SettingsActivity, R.string.settings_saved, Toast.LENGTH_SHORT).show()
                 finish()
             }
@@ -36,6 +42,8 @@ class SettingsActivity : Activity() {
                 setPadding(pad, pad, pad, pad)
                 addView(TextView(context).apply { text = getString(R.string.settings_title); textSize = 22f })
                 addView(key)
+                addView(TextView(context).apply { text = getString(R.string.settings_daily_cap) })
+                addView(cap)
                 addView(save)
             }
         )

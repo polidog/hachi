@@ -59,6 +59,11 @@ class Conversation(
             ui.onError(context.getString(R.string.error_no_api_key))
             return
         }
+        val cap = settings.dailyCapUsd
+        if (usage.overDailyCap(cap)) {
+            ui.onError(context.getString(R.string.error_daily_cap, String.format("%.2f", cap)))
+            return
+        }
         stopped = false
         ui.onState(State.CONNECTING)
         audioMode.enter()
@@ -105,7 +110,13 @@ class Conversation(
 
                 override fun onUsage(metadata: JSONObject) { main.post {
                     usage.observe(settings.model, metadata)
-                    ui.onSpend(usage.monthLabel())
+                    ui.onSpend(usage.label())
+                    // The cap can be crossed mid-sentence; end the session as soon as it is.
+                    val limit = settings.dailyCapUsd
+                    if (usage.overDailyCap(limit)) {
+                        ui.onError(context.getString(R.string.error_daily_cap, String.format("%.2f", limit)))
+                        stop()
+                    }
                 } }
 
                 override fun onClosed(reason: String?) { main.post {

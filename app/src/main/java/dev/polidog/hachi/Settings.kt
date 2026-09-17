@@ -26,6 +26,9 @@ class Settings(context: Context) {
     val geminiKey get() = secret("geminiKey")
     val model get() = get("model", DEFAULT_MODEL)
     val voice get() = get("voice", DEFAULT_VOICE)
+    /** Dollars of Gemini spend allowed per day; 0 means no limit. */
+    val dailyCapUsd get() = get("dailyCap", DEFAULT_DAILY_CAP).toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
+
     /** Seconds of silence that end a conversation. */
     val silenceTimeout get() = get("silenceTimeout", "30").toLongOrNull()?.coerceIn(5, 600) ?: 30L
     var wakeEnabled: Boolean
@@ -77,6 +80,7 @@ class Settings(context: Context) {
     companion object {
         const val DEFAULT_MODEL = "gemini-3.8-live"
         const val DEFAULT_VOICE = "Aoede"
+        const val DEFAULT_DAILY_CAP = "0.50"
         private const val KEY_ALIAS = "hachi-settings"
     }
 }

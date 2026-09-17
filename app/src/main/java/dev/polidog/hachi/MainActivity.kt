@@ -38,7 +38,7 @@ class MainActivity : Activity(), Conversation.Ui {
             gravity = Gravity.BOTTOM or Gravity.END
             val pad = (resources.displayMetrics.density * 8).toInt()
             setPadding(pad, pad, pad, pad)
-            text = Usage(this@MainActivity).monthLabel()
+            text = Usage(this@MainActivity).label()
         }
         val root = FrameLayout(this).apply {
             addView(ClockView(context))
