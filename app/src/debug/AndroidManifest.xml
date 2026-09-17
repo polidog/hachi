@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug builds only: this manifest is not merged into a release build at all, so the
+             receiver cannot ship. It is exported because `adb shell am broadcast` runs as the shell
+             user, which cannot reach a non-exported component. -->
+        <receiver android:name=".DebugSettingsReceiver" android:exported="true" />
+    </application>
+</manifest>
