@@ -63,4 +63,9 @@
     <string name="weather_unavailable">天気を取得できませんでした。</string>
     <string name="rain_now">今</string>
     <string name="rain_minutes">%1$d分後</string>
+    <string name="rain_starts_in">%1$d分後に雨（%2$s）</string>
+    <string name="rain_stops_in">雨・%1$d分後にやみます</string>
+    <string name="rain_continues">雨・1時間先まで%1$s</string>
+    <string name="rain_dry_hour">1時間先まで雨は降りません</string>
+    <string name="rain_stops_then_resumes">雨・%1$d分後にやみ、%2$d分後にまた降ります</string>
 </resources>

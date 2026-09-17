@@ -63,4 +63,9 @@
     <string name="weather_unavailable">Could not fetch the weather.</string>
     <string name="rain_now">now</string>
     <string name="rain_minutes">+%1$d min</string>
+    <string name="rain_starts_in">Rain in %1$d min (%2$s)</string>
+    <string name="rain_stops_in">Rain, easing off in %1$d min</string>
+    <string name="rain_continues">Raining — %1$s for the next hour</string>
+    <string name="rain_dry_hour">No rain for the next hour</string>
+    <string name="rain_stops_then_resumes">Rain, easing off in %1$d min, back in %2$d</string>
 </resources>

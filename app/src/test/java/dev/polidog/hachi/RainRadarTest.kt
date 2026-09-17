@@ -1,6 +1,5 @@
 package dev.polidog.hachi
 
-import dev.polidog.hachi.tools.summarizeRain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -84,7 +83,28 @@ class RainRadarTest {
         )
         assertTrue(summary.rainingNow)
         assertEquals(20, summary.stopsInMinutes)
+        assertNull("stays dry once it stops", summary.resumesInMinutes)
         assertNull("not asked about starting while it is already raining", summary.startsInMinutes)
+    }
+
+    @Test
+    fun aLullIsNotAClearHour() {
+        // Exactly the Miyazaki reading that made the page claim an hour in the clear: raining now,
+        // dry for most of the hour, raining again at the end of it.
+        val summary = summarizeRain(
+            listOf(
+                RainPoint(0, 0.95, true),
+                RainPoint(10, 0.0, false),
+                RainPoint(20, 0.0, false),
+                RainPoint(30, 0.0, false),
+                RainPoint(40, 0.0, false),
+                RainPoint(50, 0.0, false),
+                RainPoint(60, 3.13, false),
+            )
+        )
+        assertTrue(summary.rainingNow)
+        assertEquals(10, summary.stopsInMinutes)
+        assertEquals(60, summary.resumesInMinutes)
     }
 
     @Test

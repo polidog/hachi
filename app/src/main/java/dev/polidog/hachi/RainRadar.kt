@@ -80,3 +80,39 @@ private val STAMP = DateTimeFormatter.ofPattern("yyyyMMddHHmm")
 
 private fun parseStamp(value: String): LocalDateTime? =
     runCatching { LocalDateTime.parse(value, STAMP) }.getOrNull()
+
+/** What the radar readings amount to: raining now? starting soon? stopping soon? how hard? */
+data class RainSummary(
+    val rainingNow: Boolean,
+    val startsInMinutes: Int?,
+    val stopsInMinutes: Int?,
+    /** Rain returning after [stopsInMinutes] -- a lull is not the same as a clear hour. */
+    val resumesInMinutes: Int?,
+    val peakMmPerHour: Double,
+)
+
+/**
+ * Reduces the radar series to the few facts worth saying out loud.
+ *
+ * "Now" is the first reading, which the API anchors to the current 10-minute step. [startsInMinutes]
+ * is only set when it is dry now, and [stopsInMinutes] only when it is raining now -- reporting both
+ * at once would mean describing a gap the caller did not ask about.
+ *
+ * [resumesInMinutes] exists because saying only "it stops in ten minutes" reads as an hour in the
+ * clear, which is wrong whenever the radar shows rain returning before the hour is out.
+ */
+fun summarizeRain(points: List<RainPoint>): RainSummary {
+    if (points.isEmpty()) return RainSummary(false, null, null, null, 0.0)
+    val rainingNow = points.first().mmPerHour > 0.0
+    val upcoming = points.drop(1)
+    val stops = if (rainingNow) upcoming.firstOrNull { it.mmPerHour <= 0.0 }?.minutesFromNow else null
+    return RainSummary(
+        rainingNow = rainingNow,
+        startsInMinutes = if (rainingNow) null else upcoming.firstOrNull { it.mmPerHour > 0.0 }?.minutesFromNow,
+        stopsInMinutes = stops,
+        resumesInMinutes = stops?.let { after ->
+            upcoming.firstOrNull { it.minutesFromNow > after && it.mmPerHour > 0.0 }?.minutesFromNow
+        },
+        peakMmPerHour = points.maxOf { it.mmPerHour },
+    )
+}

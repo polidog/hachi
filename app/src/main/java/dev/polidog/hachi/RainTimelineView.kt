@@ -6,13 +6,18 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.view.View
+import kotlin.math.sqrt
 
 /**
  * The next hour of rain as a row of bars, one per ten-minute reading.
  *
  * Observed readings are drawn solid and forecast ones translucent, so "it is raining" and "it will
- * be raining" are not the same mark. Heights are linear in mm/h up to [FULL_SCALE]; anything heavier
- * is off the chart by any ordinary standard and simply fills the bar.
+ * be raining" are not the same mark, and dry slots are greyed so a dry hour reads as dry at a
+ * glance.
+ *
+ * Heights follow the square root of mm/h up to [FULL_SCALE]. Linear was unreadable: real drizzle of
+ * 0.45 mm/h came out at 4% of the bar, indistinguishable from no rain at all, while the readings
+ * that matter for "do I need an umbrella" live almost entirely below 3 mm/h.
  */
 class RainTimelineView(context: Context) : View(context) {
     private var points: List<RainPoint> = emptyList()
@@ -43,10 +48,14 @@ class RainTimelineView(context: Context) : View(context) {
         val slot = width.toFloat() / points.size
         val gap = slot * 0.22f
         for ((index, point) in points.withIndex()) {
-            val fraction = (point.mmPerHour / FULL_SCALE).coerceIn(0.0, 1.0).toFloat()
+            val fraction = sqrt((point.mmPerHour / FULL_SCALE).coerceIn(0.0, 1.0)).toFloat()
             // A dry slot still gets a sliver, so the row reads as a timeline rather than a gap.
             val barHeight = maxOf(fraction * (floor - dp(4)), dp(2).toFloat())
-            barPaint.color = if (point.observed) OBSERVED else FORECAST
+            barPaint.color = when {
+                point.mmPerHour <= 0.0 -> DRY
+                point.observed -> OBSERVED
+                else -> FORECAST
+            }
             bar.set(index * slot + gap / 2, floor - barHeight, (index + 1) * slot - gap / 2, floor)
             canvas.drawRoundRect(bar, dp(2).toFloat(), dp(2).toFloat(), barPaint)
         }
@@ -65,5 +74,6 @@ class RainTimelineView(context: Context) : View(context) {
         const val FULL_SCALE = 10.0
         val OBSERVED = Color.rgb(0x6F, 0xB1, 0xE8)
         val FORECAST = Color.argb(0x8A, 0x6F, 0xB1, 0xE8)
+        val DRY = Color.argb(0x2E, 0xFA, 0xF6, 0xEC)
     }
 }

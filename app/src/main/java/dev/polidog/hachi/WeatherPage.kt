@@ -26,6 +26,10 @@ class WeatherPage(context: Context) : LinearLayout(context) {
     private val today = DayCard(context)
     private val tomorrow = DayCard(context)
     private val rain = RainTimelineView(context)
+    private val rainSummary = TextView(context).apply {
+        setTextColor(CREAM)
+        textSize = 13f
+    }
     private val message = TextView(context).apply {
         setTextColor(CREAM_60)
         textSize = 14f
@@ -36,15 +40,13 @@ class WeatherPage(context: Context) : LinearLayout(context) {
     init {
         orientation = VERTICAL
         val side = context.dp(28)
-        setPadding(side, context.dp(20), side, context.dp(16))
+        // The floating Talk button sits over the bottom centre of every page, so the page keeps
+        // clear of it rather than drawing underneath.
+        setPadding(side, context.dp(16), side, context.dp(54))
 
         addView(place)
         addView(message, LayoutParams(FILL, 0, 1f))
 
-        val columns = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
         val now = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -58,17 +60,31 @@ class WeatherPage(context: Context) : LinearLayout(context) {
                 LayoutParams(WRAP, WRAP).apply { marginStart = context.dp(14) },
             )
         }
-        columns.addView(now, LayoutParams(0, WRAP, 1.1f))
-        columns.addView(
-            LinearLayout(context).apply {
-                orientation = VERTICAL
-                addView(today)
-                addView(tomorrow, LayoutParams(FILL, WRAP).apply { topMargin = context.dp(8) })
-            },
-            LayoutParams(0, WRAP, 1f),
-        )
+        // Left: what it is doing now, with the rain timeline under it. Right: the next two days.
+        // Splitting it this way keeps both columns clear of the Talk button in the middle.
+        val left = LinearLayout(context).apply {
+            orientation = VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(now)
+            addView(rainSummary, LayoutParams(WRAP, WRAP).apply { topMargin = context.dp(12) })
+            addView(
+                rain,
+                LayoutParams(FILL, context.dp(60)).apply { topMargin = context.dp(4) },
+            )
+        }
+        val right = LinearLayout(context).apply {
+            orientation = VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(today)
+            addView(tomorrow, LayoutParams(FILL, WRAP).apply { topMargin = context.dp(8) })
+        }
+        val columns = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(left, LayoutParams(0, WRAP, 1.05f))
+            addView(right, LayoutParams(0, WRAP, 1f).apply { marginStart = context.dp(16) })
+        }
         addView(columns, LayoutParams(FILL, 0, 1f))
-        addView(rain, LayoutParams(FILL, context.dp(58)).apply { topMargin = context.dp(8) })
     }
 
     fun bind(state: WeatherState) {
@@ -80,7 +96,7 @@ class WeatherPage(context: Context) : LinearLayout(context) {
             )
             message.visibility = VISIBLE
             place.text = state.place?.name.orEmpty()
-            listOf<android.view.View>(emoji, temperature, condition, today, tomorrow, rain)
+            listOf<android.view.View>(emoji, temperature, condition, today, tomorrow, rain, rainSummary)
                 .forEach { it.visibility = GONE }
             return
         }
@@ -94,6 +110,32 @@ class WeatherPage(context: Context) : LinearLayout(context) {
         today.bind(context.getString(R.string.weather_today), forecast.days.getOrNull(0))
         tomorrow.bind(context.getString(R.string.weather_tomorrow), forecast.days.getOrNull(1))
         rain.bind(state.rain)
+        bindRainSummary(state.rain)
+    }
+
+    /** The one sentence the radar is worth: is it raining, and is that about to change? */
+    private fun bindRainSummary(points: List<RainPoint>) {
+        if (points.isEmpty()) {
+            rainSummary.visibility = GONE
+            return
+        }
+        rainSummary.visibility = VISIBLE
+        val summary = summarizeRain(points)
+        val intensity = context.getString(rainLabelRes(summary.peakMmPerHour))
+        rainSummary.text = when {
+            summary.rainingNow && summary.stopsInMinutes != null && summary.resumesInMinutes != null ->
+                context.getString(
+                    R.string.rain_stops_then_resumes,
+                    summary.stopsInMinutes,
+                    summary.resumesInMinutes,
+                )
+            summary.rainingNow && summary.stopsInMinutes != null ->
+                context.getString(R.string.rain_stops_in, summary.stopsInMinutes)
+            summary.rainingNow -> context.getString(R.string.rain_continues, intensity)
+            summary.startsInMinutes != null ->
+                context.getString(R.string.rain_starts_in, summary.startsInMinutes, intensity)
+            else -> context.getString(R.string.rain_dry_hour)
+        }
     }
 }
 

@@ -73,9 +73,10 @@ class MainActivity : Activity(), Conversation.Ui {
                         .apply { topMargin = dp(10) },
                 )
                 addView(
+                    // Top right, beside the settings button: the bottom corners belong to the pages.
                     spend,
-                    FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START)
-                        .apply { leftMargin = dp(18); bottomMargin = dp(16) },
+                    FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END)
+                        .apply { rightMargin = dp(66); topMargin = dp(24) },
                 )
                 addView(
                     settingsButton(),
