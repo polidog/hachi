@@ -52,7 +52,7 @@ app/src/main/java/dev/polidog/hachi/
 ├── Settings.kt              # SharedPreferences + Keystore による秘密情報の保管
 ├── Usage.kt                 # usageMetadata からの料金計上と日次上限
 ├── ModelCatalog.kt          # ListModels から Live 対応モデルを取得
-└── tools/                   # (Phase 3〜) Gemini の function calling で公開する道具
+└── tools/                   # Gemini の function calling で公開する道具（下記「tools/ の規約」）
 app/src/test/java/dev/polidog/hachi/
 ├── UsageTest.kt
 └── DayPaletteTest.kt
@@ -71,7 +71,7 @@ docs/
 
 **Activity は表示だけを持つ。** `MainActivity` は `Conversation.Ui` を実装して字幕と状態を描くだけで、音声も WebSocket も触らない。会話の制御は `Conversation` が持ち、Phase 1 で Foreground Service へ移す（下記）。
 
-**外部サービスごとに 1 クライアント。** Gemini、Home Assistant、Open-Meteo、Immich はそれぞれ独立したクラスが HTTP を話し、アプリ内の型に変換して返す。共通の HTTP 抽象は作らない。
+**外部サービスごとに 1 クライアント。** Gemini、Open-Meteo、Immich はそれぞれ独立したクラスが HTTP を話し、アプリ内の型に変換して返す。共通の HTTP 抽象は作らない。Home Assistant だけは専用クライアントを持たず、MCP サーバとして喋る（下記）。
 
 **端末は 1 台しかない。** 画面サイズ（960x480）・ABI・Android バージョンを分岐で吸収する必要がないので、汎用化はしない。
 
@@ -94,7 +94,22 @@ Settings / Usage  ◀───────────────────�
 
 ### tools/ の規約
 
-Gemini の function calling で公開する道具は `tools/` にまとめる。理由は数が増えるのが分かっているから（時刻・天気・Home Assistant 操作・機器の状態・機器一覧・音楽操作…）。1 道具 1 ファイルで、宣言（`FunctionDeclaration` の JSON）と実行を同じファイルに置く。登録は `tools/ToolRegistry.kt` が一括で行い、`Conversation` はレジストリ越しにしか道具を知らない。
+Gemini の function calling で公開する道具は `tools/` にまとめる。1 道具 1 ファイルで、宣言（`FunctionDeclaration` の JSON）と実行を同じファイルに置く。登録は `tools/ToolRegistry.kt` が一括で行い、`Conversation` はレジストリ越しにしか道具を知らない。
+
+道具の出どころは 2 つある。
+
+**自前で書くのは、端末とアプリの都合を知っている道具だけ。** 時刻（`GetCurrentTimeTool`）と天気（`GetWeatherTool`）。どちらも数十行で、天気は画面（`WeatherPage`）と同じデータを使うので外に出す意味がない。
+
+**家のことは Home Assistant の MCP サーバに丸ごと預ける。** 機器の操作・状態取得・音楽（選曲を含む）は自前の道具にせず、HA の MCP サーバ（`/api/mcp`、Streamable HTTP、Bearer トークン）に `tools/list` で聞いた道具をそのまま Gemini に渡し、呼ばれたら `tools/call` に流す。`tools/McpServer.kt` が JSON-RPC を話し、返ってきたツールを `Tool` の実装として `ToolRegistry` に並べる。
+
+理由は、自前で書くと HA が既に持っているものを作り直すことになるから。butler では「寝室の電気」を entity に当てるファジーマッチ、`/api/states` に無い部屋名を Jinja テンプレートで引いてキャッシュする処理、domain × action → service のホワイトリストで 400 行以上を費やしている。MCP 経由ならそれは HA の Assist 側に残る。加えて butler の自前ツールは `play` / `pause` / `next` / `set_volume` 止まりで選曲ができないが、HA の組み込みインテント `HassMediaSearchAndPlay` は曲名・アーティストを受け取る。要件（機器と音楽）に対して、自前のほうが実装量が多く、できることが少ない。
+
+**MCP クライアントは端末側に置く。** butler は OpenAI Realtime のホスト型 MCP ツール（tools 配列に `{"type":"mcp", "server_url":…}` を入れるだけで、接続は OpenAI 側が行う）を使っているが、この形は取れない。Gemini Live に同等のホスト型ツールがなく、Gemini の MCP 対応は SDK がクライアント側で `tools/list` を functionDeclarations に変換する方式で、生の WebSocket を喋る Hachi には SDK の恩恵もない。端末側に置くことで、butler ができなかった LAN 内の MCP サーバに繋がる — HA を公開せずに済むのはこのため。
+
+実装上の制約が 2 つある。
+
+- **道具の一覧はネット越しなので、セッション開始時には取りに行かない。** `Conversation.start()` はメインスレッドで、その場で `tools/list` を待つわけにいかない。バックグラウンドで取って保存し、次の会話から反映する。初回だけ家の道具が無い状態で始まる
+- **呼び出しごとの承認画面は持たない。** butler はホスト型 MCP の `mcp_approval_request` イベントで都度確認しているが、こちらはモデルが止まってくれない。鍵開けなど危ない操作は口頭で確認してから呼ぶよう system instruction に書く。実際にダイアログが要ると分かるまで作らない
 
 ## 音声パイプラインとハーフデュプレックス制約
 
@@ -159,7 +174,7 @@ Live API がセッション中に送る `usageMetadata` のトークン数から
 | 0 | 骨組みと時計 | 完了 |
 | 2 | Gemini Live 会話・料金計上・設定画面 | 完了 |
 | 1 | ウェイクワード常時待受（Julius の成果物を butler から流用）。**会話と検出を Foreground Service に移し、Activity は表示だけにする** | 未着手 |
-| 3 | 道具: 時刻 / 天気 (Open-Meteo) / Home Assistant 操作・状態取得 / Spotify (HA の `media_player` 経由) | 未着手 |
+| 3 | 道具: 時刻 / 天気 (Open-Meteo) は完了。残りは Home Assistant の MCP サーバ (`/api/mcp`) に繋ぐクライアント 1 本で、機器操作・状態取得・音楽をまとめて賄う | 進行中 |
 | 4 | ホーム画面のページャ（時計・天気・スマートホーム・音楽・フォト） | 未着手 |
 | 5 | Immich フォトフレーム | 未着手 |
 
