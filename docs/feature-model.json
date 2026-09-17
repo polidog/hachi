@@ -1,0 +1,630 @@
+{
+  "project": "Hachi",
+  "updatedAt": "2026-09-17",
+  "domains": [
+    {
+      "id": "voice",
+      "name": "音声会話",
+      "features": [
+        {
+          "id": "voice.conversation",
+          "name": "会話セッション",
+          "type": "mandatory",
+          "status": "done",
+          "description": "Gemini Live API と 1 回の音声会話を張り、終わったら閉じる。",
+          "children": [
+            {
+              "id": "voice.conversation.start",
+              "name": "会話の始めかた",
+              "type": "mandatory",
+              "status": "in-progress",
+              "description": "どうやって会話を開始するか。",
+              "variationPoint": "会話の始めかた",
+              "children": [
+                {
+                  "id": "voice.conversation.start.button",
+                  "name": "トークボタン",
+                  "type": "or",
+                  "status": "done",
+                  "description": "画面下のボタンを押して始める。マイク権限が未許可なら先に要求する。",
+                  "children": []
+                },
+                {
+                  "id": "voice.conversation.start.wake-word",
+                  "name": "ウェイクワード常時待受",
+                  "type": "or",
+                  "status": "planned",
+                  "description": "Phase 1。Julius の成果物を butler から流用し、検出を Foreground Service に置く。",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "voice.conversation.end",
+              "name": "会話の終わりかた",
+              "type": "mandatory",
+              "status": "done",
+              "description": "会話が閉じる契機。どれか 1 つでも起きればセッションは終わる。",
+              "variationPoint": "会話の終わりかた",
+              "children": [
+                {
+                  "id": "voice.conversation.end.silence",
+                  "name": "無音タイムアウト",
+                  "type": "or",
+                  "status": "done",
+                  "description": "どちらも喋らないまま silenceTimeout 秒が過ぎたら閉じる（既定 30 秒、5〜600 秒）。",
+                  "children": []
+                },
+                {
+                  "id": "voice.conversation.end.manual",
+                  "name": "終了ボタン",
+                  "type": "or",
+                  "status": "done",
+                  "description": "会話オーバーレイの終了ボタンで即座に閉じる。",
+                  "children": []
+                },
+                {
+                  "id": "voice.conversation.end.cap",
+                  "name": "日次上限到達",
+                  "type": "or",
+                  "status": "done",
+                  "description": "会話中に今日の上限額を超えたら、その場で閉じる。",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "id": "voice.conversation.caption",
+              "name": "字幕",
+              "type": "mandatory",
+              "status": "done",
+              "description": "入出力双方の文字起こしを setup で有効にし、会話オーバーレイに流す。",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "voice.half-duplex",
+          "name": "ハーフデュプレックス",
+          "type": "mandatory",
+          "status": "done",
+          "description": "端末にエコーキャンセラがないため、モデルが自分の声を拾わないようにする仕組み。",
+          "variationPoint": "エコー対策",
+          "children": [
+            {
+              "id": "voice.half-duplex.gate",
+              "name": "送信ゲート",
+              "type": "alternative",
+              "status": "done",
+              "description": "スピーカーが鳴っている間はマイクの音を一切送らない。鳴り終わりの実時刻を自前で持ち、余白 600 ms。",
+              "children": []
+            },
+            {
+              "id": "voice.half-duplex.aec",
+              "name": "ソフトウェア AEC",
+              "type": "alternative",
+              "status": "planned",
+              "description": "WebRTC AudioProcessing を積む上位互換。喋りかぶせが本当に必要と分かるまで入れない。",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "voice.hush",
+          "name": "返答を捨てる",
+          "type": "mandatory",
+          "status": "done",
+          "description": "送信ゲートで喋りかぶせができない代償として、画面タップで再生中の返答だけを落とす。",
+          "children": []
+        },
+        {
+          "id": "voice.model",
+          "name": "Live モデルの選択",
+          "type": "mandatory",
+          "status": "done",
+          "description": "会話に使う Gemini モデル。",
+          "children": [
+            {
+              "id": "voice.model.catalog",
+              "name": "ListModels から取得",
+              "type": "mandatory",
+              "status": "done",
+              "description": "bidiGenerateContent を名乗るモデルだけに絞る。新しい Live モデルがアプリ更新なしで出る。",
+              "children": []
+            },
+            {
+              "id": "voice.model.fallback",
+              "name": "内蔵の既定一覧",
+              "type": "mandatory",
+              "status": "done",
+              "description": "取得前・オフライン・失敗時に使う手書きの一覧。",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "voice.voice-choice",
+          "name": "プリセット音声",
+          "type": "mandatory",
+          "status": "done",
+          "description": "Aoede ほか、Google が文書化しているプリセット音声から 1 つ。一覧する API がないので手で持つ。",
+          "children": []
+        },
+        {
+          "id": "voice.tools",
+          "name": "道具（function calling）",
+          "type": "mandatory",
+          "status": "in-progress",
+          "description": "モデルに公開する道具。1 道具 1 ファイルで、宣言と実行を同じ場所に置く。",
+          "variationPoint": "公開する道具",
+          "children": [
+            {
+              "id": "voice.tools.time",
+              "name": "いまの時刻",
+              "type": "or",
+              "status": "done",
+              "description": "端末のロケールとタイムゾーンで現在時刻を返す。外部 I/O なし。",
+              "children": []
+            },
+            {
+              "id": "voice.tools.weather",
+              "name": "天気",
+              "type": "or",
+              "status": "done",
+              "description": "設定した場所の現在・今日・明日、および日本なら 1 時間先までの雨を返す。",
+              "children": []
+            },
+            {
+              "id": "voice.tools.home-assistant",
+              "name": "Home Assistant 操作・状態取得",
+              "type": "or",
+              "status": "planned",
+              "description": "Phase 3。機器の操作、機器の状態、機器一覧。",
+              "children": []
+            },
+            {
+              "id": "voice.tools.music",
+              "name": "音楽操作",
+              "type": "or",
+              "status": "planned",
+              "description": "Phase 3。Spotify を Home Assistant の media_player 越しに操る。",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "voice.service",
+          "name": "Foreground Service 化",
+          "type": "optional",
+          "status": "planned",
+          "description": "Phase 1。会話と検出を Service に移し、Activity は表示だけにする。マニフェストの権限は先に取ってある。",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "weather",
+      "name": "天気",
+      "features": [
+        {
+          "id": "weather.place",
+          "name": "場所の設定",
+          "type": "mandatory",
+          "status": "done",
+          "description": "Open-Meteo のジオコーディングで名前を引き、緯度経度とともに保存する。選ぶまでは天気が出ない。",
+          "children": []
+        },
+        {
+          "id": "weather.forecast",
+          "name": "予報",
+          "type": "mandatory",
+          "status": "done",
+          "description": "Open-Meteo。現在の気温・天気コード・昼夜と、3 日分の最高／最低／天気コード／降水確率。鍵不要・全世界。",
+          "children": []
+        },
+        {
+          "id": "weather.rain-nowcast",
+          "name": "1 時間先までの雨",
+          "type": "optional",
+          "status": "done",
+          "description": "Yahoo! Japan の YOLP。10 分刻みの実測と予測の雨量。日本限定で application id が要るので、未設定ならこの半分だけ落ちる。",
+          "children": [
+            {
+              "id": "weather.rain-nowcast.summary",
+              "name": "要約",
+              "type": "mandatory",
+              "status": "done",
+              "description": "いま降っているか／いつ降り出すか／いつ止むか／止んだあと戻るか／ピーク強度。",
+              "children": []
+            },
+            {
+              "id": "weather.rain-nowcast.timeline",
+              "name": "タイムライン表示",
+              "type": "mandatory",
+              "status": "done",
+              "description": "10 分刻みの雨量を帯として描く。",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "weather.refresh",
+          "name": "定期更新",
+          "type": "mandatory",
+          "status": "done",
+          "description": "アプリ全体で 1 部の天気を持ち、15 分ごとに取り直す。画面が伏せられている間は止める。",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "display",
+      "name": "画面",
+      "features": [
+        {
+          "id": "display.pager",
+          "name": "ホームのページャ",
+          "type": "mandatory",
+          "status": "in-progress",
+          "description": "横スワイプで切り替わるホーム画面。現在 3 ページ、Phase 4〜5 で増やす。",
+          "variationPoint": "ホームのページ",
+          "children": [
+            {
+              "id": "display.pager.clock",
+              "name": "時計",
+              "type": "or",
+              "status": "done",
+              "description": "既定のページ。空を背にした時計。",
+              "children": []
+            },
+            {
+              "id": "display.pager.weather",
+              "name": "天気",
+              "type": "or",
+              "status": "done",
+              "description": "現在・今日・明日と、あれば雨のタイムライン。",
+              "children": []
+            },
+            {
+              "id": "display.pager.radar",
+              "name": "雨雲レーダー",
+              "type": "or",
+              "status": "done",
+              "description": "地図に雨雲を重ねたページ。",
+              "children": []
+            },
+            {
+              "id": "display.pager.home",
+              "name": "スマートホーム",
+              "type": "or",
+              "status": "planned",
+              "description": "Phase 4。",
+              "children": []
+            },
+            {
+              "id": "display.pager.music",
+              "name": "音楽",
+              "type": "or",
+              "status": "planned",
+              "description": "Phase 4。",
+              "children": []
+            },
+            {
+              "id": "display.pager.photo",
+              "name": "フォトフレーム",
+              "type": "or",
+              "status": "planned",
+              "description": "Phase 5。",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "display.sky",
+          "name": "背景の空",
+          "type": "mandatory",
+          "status": "done",
+          "description": "全ページの背後に敷く 3 段グラデーション。",
+          "children": [
+            {
+              "id": "display.sky.time-of-day",
+              "name": "時刻でのグラデーション",
+              "type": "mandatory",
+              "status": "done",
+              "description": "キーフレームをチャンネルごとに補間し、夜明けと日暮れを跨いで滑らかに移る。1 日は巡るので末尾は真夜中へ戻る。",
+              "children": []
+            },
+            {
+              "id": "display.sky.weather-wash",
+              "name": "天気での退色",
+              "type": "mandatory",
+              "status": "done",
+              "description": "WMO コードを 7 つの情景に畳み、彩度と明度を落として時刻の色に重ねる。曇りの昼は曇りの夕方より明るいままになる。",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "display.radar-map",
+          "name": "レーダーの地図",
+          "type": "mandatory",
+          "status": "done",
+          "description": "地理院の淡色タイルに気象庁ナウキャストのタイルを重ねる。タイルは端末密度に合わせず原寸で描く。",
+          "children": [
+            {
+              "id": "display.radar-map.zoom",
+              "name": "縮尺の切替",
+              "type": "mandatory",
+              "status": "done",
+              "description": "タップで巡回し、選んだ縮尺を覚える。",
+              "children": []
+            },
+            {
+              "id": "display.radar-map.scale",
+              "name": "画面幅の実距離表示",
+              "type": "mandatory",
+              "status": "done",
+              "description": "いま何 km 幅を見ているかを出典表示の横に出す。縮尺が推測にならないように。",
+              "children": []
+            },
+            {
+              "id": "display.radar-map.animation",
+              "name": "コマ送り",
+              "type": "optional",
+              "status": "planned",
+              "description": "ナウキャストは過去と 1 時間先も 5 分刻みで出しており動かせるが、20 コマ分のタイルを抱えることになるので、要ると分かるまで待つ。",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "display.always-on",
+          "name": "壁掛け表示",
+          "type": "mandatory",
+          "status": "done",
+          "description": "画面を消さない、全画面でシステム UI を隠す、横固定、HOME の候補として名乗る（既定ランチャーは自動で変えない）。",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "spend",
+      "name": "料金",
+      "features": [
+        {
+          "id": "spend.metering",
+          "name": "積算",
+          "type": "mandatory",
+          "status": "done",
+          "description": "セッション中に届く usageMetadata から自前で計上する。Cloud Billing は数時間遅れるので見ない。",
+          "children": [
+            {
+              "id": "spend.metering.modality",
+              "name": "モダリティ別の単価",
+              "type": "mandatory",
+              "status": "done",
+              "description": "TEXT / AUDIO / IMAGE / VIDEO それぞれの単価を掛け、ドル額だけを日次・月次に足す。月の途中でモデルを変えても合算が狂わない。",
+              "children": []
+            },
+            {
+              "id": "spend.metering.unknown-high",
+              "name": "不明分を高いほうに倒す",
+              "type": "mandatory",
+              "status": "done",
+              "description": "内訳に現れない分と thoughtsTokenCount も必ず計上し、未知のモデルは高いほうの単価で見る。過小計上のほうが害が大きいため。",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "spend.display",
+          "name": "使用額の表示",
+          "type": "mandatory",
+          "status": "done",
+          "description": "今日／今月のドル額。小さい数字が動いて見えるよう小数 3 桁。ホーム右上と設定画面の両方に出る。",
+          "children": []
+        },
+        {
+          "id": "spend.daily-cap",
+          "name": "日次上限",
+          "type": "optional",
+          "status": "done",
+          "description": "今日の使用額が上限に達したら会話を始めさせない。0 を入れると無制限。",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "config",
+      "name": "設定",
+      "features": [
+        {
+          "id": "config.screen",
+          "name": "設定画面",
+          "type": "mandatory",
+          "status": "done",
+          "description": "左に項目・右に中身のマスター／ディテール。「適用」はなく、触った時点で保存される。",
+          "children": []
+        },
+        {
+          "id": "config.secret-storage",
+          "name": "秘密情報の保管",
+          "type": "mandatory",
+          "status": "done",
+          "description": "Android Keystore の AES/GCM 鍵で暗号化し `<IV>:<暗号文>` で保存する。復号できないときは例外を投げず未設定に倒す。",
+          "children": []
+        },
+        {
+          "id": "config.adb-input",
+          "name": "開発機からの投入",
+          "type": "optional",
+          "status": "done",
+          "description": "5 インチの画面で打つには長すぎる値を adb のブロードキャストで入れる。debug ビルドのみ。知らない設定名は書かずに弾く。",
+          "children": []
+        },
+        {
+          "id": "config.backup-off",
+          "name": "バックアップ無効",
+          "type": "mandatory",
+          "status": "done",
+          "description": "allowBackup=false。鍵を端末の外に出さない。",
+          "children": []
+        }
+      ]
+    },
+    {
+      "id": "integrations",
+      "name": "外部サービス連携",
+      "features": [
+        {
+          "id": "integrations.home-assistant",
+          "name": "Home Assistant",
+          "type": "optional",
+          "status": "planned",
+          "description": "Phase 3。URL とアクセストークンの設定名だけ先に予約してある。",
+          "children": [
+            {
+              "id": "integrations.home-assistant.control",
+              "name": "機器の操作",
+              "type": "mandatory",
+              "status": "planned",
+              "description": "",
+              "children": []
+            },
+            {
+              "id": "integrations.home-assistant.state",
+              "name": "機器の状態取得",
+              "type": "mandatory",
+              "status": "planned",
+              "description": "",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "integrations.music",
+          "name": "音楽（Spotify）",
+          "type": "optional",
+          "status": "planned",
+          "description": "Phase 3。Home Assistant の media_player 越しに操る。直に Spotify を叩かない。",
+          "children": []
+        },
+        {
+          "id": "integrations.photos",
+          "name": "写真（Immich）",
+          "type": "optional",
+          "status": "planned",
+          "description": "Phase 5。Google フォトは photoslibrary.readonly の廃止と Picker API の制約で選択肢から外した。",
+          "children": []
+        }
+      ]
+    }
+  ],
+  "constraints": [
+    {
+      "type": "requires",
+      "from": "weather.rain-nowcast",
+      "fromName": "1 時間先までの雨",
+      "to": "weather.place",
+      "toName": "場所の設定"
+    },
+    {
+      "type": "requires",
+      "from": "weather.forecast",
+      "fromName": "予報",
+      "to": "weather.place",
+      "toName": "場所の設定"
+    },
+    {
+      "type": "requires",
+      "from": "display.pager.radar",
+      "fromName": "雨雲レーダー",
+      "to": "weather.place",
+      "toName": "場所の設定"
+    },
+    {
+      "type": "requires",
+      "from": "display.sky.weather-wash",
+      "fromName": "天気での退色",
+      "to": "weather.forecast",
+      "toName": "予報"
+    },
+    {
+      "type": "requires",
+      "from": "voice.tools.weather",
+      "fromName": "天気（道具）",
+      "to": "weather.forecast",
+      "toName": "予報"
+    },
+    {
+      "type": "requires",
+      "from": "voice.conversation.end.cap",
+      "fromName": "日次上限到達",
+      "to": "spend.daily-cap",
+      "toName": "日次上限"
+    },
+    {
+      "type": "requires",
+      "from": "voice.conversation.start.wake-word",
+      "fromName": "ウェイクワード常時待受",
+      "to": "voice.service",
+      "toName": "Foreground Service 化"
+    },
+    {
+      "type": "requires",
+      "from": "voice.tools.home-assistant",
+      "fromName": "Home Assistant 操作・状態取得",
+      "to": "integrations.home-assistant",
+      "toName": "Home Assistant"
+    },
+    {
+      "type": "requires",
+      "from": "voice.tools.music",
+      "fromName": "音楽操作",
+      "to": "integrations.music",
+      "toName": "音楽（Spotify）"
+    },
+    {
+      "type": "requires",
+      "from": "integrations.music",
+      "fromName": "音楽（Spotify）",
+      "to": "integrations.home-assistant",
+      "toName": "Home Assistant"
+    },
+    {
+      "type": "requires",
+      "from": "display.pager.home",
+      "fromName": "スマートホーム（ページ）",
+      "to": "integrations.home-assistant",
+      "toName": "Home Assistant"
+    },
+    {
+      "type": "requires",
+      "from": "display.pager.music",
+      "fromName": "音楽（ページ）",
+      "to": "integrations.music",
+      "toName": "音楽（Spotify）"
+    },
+    {
+      "type": "requires",
+      "from": "display.pager.photo",
+      "fromName": "フォトフレーム",
+      "to": "integrations.photos",
+      "toName": "写真（Immich）"
+    },
+    {
+      "type": "requires",
+      "from": "config.secret-storage",
+      "fromName": "秘密情報の保管",
+      "to": "config.backup-off",
+      "toName": "バックアップ無効"
+    },
+    {
+      "type": "excludes",
+      "from": "voice.half-duplex.gate",
+      "fromName": "送信ゲート",
+      "to": "voice.half-duplex.aec",
+      "toName": "ソフトウェア AEC"
+    }
+  ]
+}

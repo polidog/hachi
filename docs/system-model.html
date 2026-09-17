@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Model: Hachi</title>
+<!-- Tailwind Play CDN: 動的生成のため SRI ハッシュ不可。ローカル閲覧専用。 -->
+<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+</head>
+<body class="bg-slate-100 h-screen flex flex-col font-sans text-slate-800 overflow-hidden">
+
+  <header class="bg-white border-b border-slate-200 px-5 py-3 flex items-center justify-between shrink-0 gap-4">
+    <div>
+      <h1 class="text-base font-bold text-slate-900">Hachi<span class="ml-2 text-xs font-normal text-slate-400">システムモデル</span></h1>
+      <p class="text-xs text-slate-400 mt-0.5">Echo Show 5 (2nd gen) の LineageOS 上で常時動く、壁掛けの音声 AI アシスタント。サーバーを持たず、端末から各サービスへ直接つなぐ。　最終更新: 2026-09-17</p>
+    </div>
+    <div class="flex items-center shrink-0 divide-x divide-slate-100"><div class="text-center px-3">
+     <div class="text-lg font-bold text-slate-700 tabular-nums leading-none">6</div>
+     <div class="text-[10px] text-slate-400 mt-1 whitespace-nowrap">ドメイン</div>
+   </div><div class="text-center px-3">
+     <div class="text-lg font-bold text-slate-700 tabular-nums leading-none">58</div>
+     <div class="text-[10px] text-slate-400 mt-1 whitespace-nowrap">フィーチャー</div>
+   </div><div class="text-center px-3">
+     <div class="text-lg font-bold text-emerald-700 tabular-nums leading-none">41</div>
+     <div class="text-[10px] text-slate-400 mt-1 whitespace-nowrap">完了F</div>
+   </div><div class="text-center px-3">
+     <div class="text-lg font-bold text-slate-700 tabular-nums leading-none">4</div>
+     <div class="text-[10px] text-slate-400 mt-1 whitespace-nowrap">アクター</div>
+   </div><div class="text-center px-3">
+     <div class="text-lg font-bold text-slate-700 tabular-nums leading-none">8</div>
+     <div class="text-[10px] text-slate-400 mt-1 whitespace-nowrap">外部</div>
+   </div><div class="text-center px-3">
+     <div class="text-lg font-bold text-slate-700 tabular-nums leading-none">5</div>
+     <div class="text-[10px] text-slate-400 mt-1 whitespace-nowrap">コンテキスト</div>
+   </div><div class="text-center px-3">
+     <div class="text-lg font-bold text-slate-700 tabular-nums leading-none">23</div>
+     <div class="text-[10px] text-slate-400 mt-1 whitespace-nowrap">エンティティ</div>
+   </div><div class="text-center px-3">
+     <div class="text-lg font-bold text-slate-700 tabular-nums leading-none">17</div>
+     <div class="text-[10px] text-slate-400 mt-1 whitespace-nowrap">ユースケース</div>
+   </div><div class="text-center px-3">
+     <div class="text-lg font-bold text-emerald-700 tabular-nums leading-none">17</div>
+     <div class="text-[10px] text-slate-400 mt-1 whitespace-nowrap">完了UC</div>
+   </div></div>
+  </header>
+
+  <div class="bg-white border-b border-slate-200 px-5 py-2 flex items-center gap-2 shrink-0">
+    <div class="flex gap-1">
+      <button data-view="feature" class="px-3 py-1.5 rounded-md text-sm font-medium bg-slate-900 text-white">フィーチャー</button>
+      <button data-view="context" class="px-3 py-1.5 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100">外部連携</button>
+      <button data-view="domain" class="px-3 py-1.5 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100">コンテキストマップ</button>
+      <button data-view="usecase" class="px-3 py-1.5 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100">ユースケース</button>
+      <button data-view="trace" class="px-3 py-1.5 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100">トレーサビリティ</button>
+      <button data-view="arch" class="px-3 py-1.5 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100">アーキテクチャ</button>
+    </div>
+    <div class="flex-1"></div>
+    <input id="search" type="search" placeholder="ノードを検索" class="px-2.5 py-1 border border-slate-300 rounded-md text-sm w-52 focus:outline-none focus:ring-1 focus:ring-slate-400">
+    <button id="btn-zoom-out" class="px-2.5 py-1 border border-slate-300 rounded-md bg-white text-sm hover:bg-slate-50">−</button>
+    <span id="zoom-label" class="text-xs text-slate-500 w-10 text-center tabular-nums">100%</span>
+    <button id="btn-zoom-in" class="px-2.5 py-1 border border-slate-300 rounded-md bg-white text-sm hover:bg-slate-50">+</button>
+    <button id="btn-fit" class="px-3 py-1 border border-slate-300 rounded-md bg-white text-sm hover:bg-slate-50">全体</button>
+  </div>
+
+  <details class="bg-amber-50 border-b border-amber-200 px-5 py-2 shrink-0">
+         <summary class="text-xs text-amber-800 cursor-pointer select-none">要確認 4 件</summary>
+         <ul class="mt-2 list-disc pl-5 text-xs text-amber-900 space-y-0.5">
+           <li>要確認: 使用報告がセッション累計なのか 1 通ごとの差分なのかが実測できていない。差分だった場合は過小計上になる（Usage.kt の ponytail コメントと、生の usageMetadata をログに出してある）</li><li>要確認: 思考トークンが実際に出力として課金されているか。いまは課金される前提で出力側に足しており、外れていれば過大計上になる</li><li>要確認: Phase 1 で会話を Foreground Service へ移したあと、会話の所有者が Activity から Service に変わる。そのとき『画面が伏せられたら会話は閉じる』という不変条件は成り立たなくなるはずだが、代わりに何が会話を閉じるのかが決まっていない</li><li>要確認: Home Assistant / Immich の設定名（homeAssistantUrl / homeAssistantToken / immichUrl / immichKey / immichAlbum）は DebugSettingsReceiver に予約されているだけで、読む側がまだない</li>
+         </ul>
+       </details>
+
+  <div id="legend" class="flex flex-wrap gap-3 px-5 py-2 bg-slate-50 border-b border-slate-200 shrink-0 min-h-[34px] items-center"></div>
+
+  <div class="flex-1 flex overflow-hidden">
+    <div id="canvas-container" class="flex-1 overflow-hidden relative">
+      <svg id="canvas" class="w-full h-full select-none" style="cursor:grab">
+        <defs>
+          <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+            <circle cx="12" cy="12" r="1" fill="#cbd5e1" opacity="0.6"/>
+          </pattern>
+          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8"/>
+          </marker>
+        </defs>
+        <rect fill="url(#grid)" x="-9999" y="-9999" width="19998" height="19998"/>
+        <g id="world"></g>
+      </svg>
+      <div id="tooltip" class="absolute hidden bg-slate-800 text-white text-xs rounded-xl px-3 py-2 pointer-events-none max-w-[240px] z-10 leading-relaxed shadow-xl"></div>
+      <div class="absolute bottom-3 left-4 text-[11px] text-slate-400 pointer-events-none">背景ドラッグでパン　Shift+ホイールで拡大縮小　ノードクリックで詳細</div>
+    </div>
+    <div id="doc-pane" class="hidden flex-1 overflow-y-auto bg-slate-50">
+      <main class="mx-auto max-w-4xl px-6 py-10">
+        <p class="text-[11px] text-slate-400 mb-4">出典: <code>docs/architecture.html</code>（編集は <code>/architecture</code> で。ここは表示のみ）</p>
+        <article id="doc" class="prose prose-slate max-w-none"></article>
+      </main>
+    </div>
+
+    <aside id="panel" class="hidden w-96 bg-white border-l border-slate-200 flex flex-col shrink-0">
+      <div class="px-4 py-3 border-b border-slate-200 flex items-start justify-between gap-2">
+        <h2 id="panel-title" class="text-sm font-bold text-slate-900 leading-snug"></h2>
+        <button id="panel-close" class="text-slate-400 hover:text-slate-700 text-lg leading-none">×</button>
+      </div>
+      <div id="panel-body" class="p-4 overflow-y-auto text-sm"></div>
+    </aside>
+  </div>
+
+<script type="text/markdown" id="doc-source">
+# アーキテクチャ規約
+
+> 最終更新: 2026-09-17
+
+Hachi は Echo Show 5 (2nd gen) の LineageOS 上で動く、常時待受の音声 AI アシスタント。Gemini Live API と会話し、天気・Home Assistant・Spotify・フォトフレームを兼ねる壁掛けディスプレイになる。サーバーは持たず、端末から各サービスへ直接つなぐ。
+
+## 技術スタック
+
+| カテゴリ | 採用技術 | バージョン |
+|---------|---------|----------|
+| 言語 | Kotlin | 2.1.20 |
+| ビルド | Android Gradle Plugin / Gradle | 8.9.2 / 8.11.1 |
+| JDK | Temurin (mise 管理) | 17 |
+| SDK | compileSdk / targetSdk / minSdk | 35 / 35 / 30 |
+| ABI | armeabi-v7a のみ | — |
+| UI | Android ネイティブ View（Compose・AndroidX は不使用） | — |
+| HTTP / WebSocket | OkHttp | 4.12.0 |
+| JSON | `org.json`（Android 同梱） | — |
+| 音声会話 | Gemini Live API (BidiGenerateContent over WebSocket) | v1beta |
+| テスト | JUnit4 + `org.json:json`（JVM のみ） | 4.13.2 / 20240303 |
+
+AndroidX も Compose も入れていない。API 30 の端末 1 台だけを対象にしており、素の View で足りる範囲しか作らないため、依存とビルド時間を増やす理由がない。
+
+## ディレクトリ全体図
+
+```
+app/src/main/java/dev/polidog/hachi/
+├── MainActivity.kt          # ホーム画面。時計・各ボタン・会話オーバーレイを載せる
+├── SettingsActivity.kt      # 設定（左に項目・右に中身のマスター/ディテール）
+├── ClockView.kt             # 時計と空のグラデーション描画
+├── DayPalette.kt            # 時刻 → 空の色（キーフレーム補間）
+├── ConversationView.kt      # 会話中のオーバーレイ（字幕・終了ボタン）
+├── Ui.kt                    # dp 変換・共通色・pill 背景
+├── Conversation.kt          # 1 回の会話。マイク/スピーカー/クライアントの配線
+├── GeminiLiveClient.kt      # Live API の WebSocket プロトコル
+├── AudioIo.kt               # AudioRecord / AudioTrack、ハーフデュプレックスの判定
+├── Settings.kt              # SharedPreferences + Keystore による秘密情報の保管
+├── Usage.kt                 # usageMetadata からの料金計上と日次上限
+├── ModelCatalog.kt          # ListModels から Live 対応モデルを取得
+└── tools/                   # (Phase 3〜) Gemini の function calling で公開する道具
+app/src/test/java/dev/polidog/hachi/
+├── UsageTest.kt
+└── DayPaletteTest.kt
+app/src/main/res/
+├── values/ values-ja/       # 文字列（UI と会話の言語は端末ロケールに従う）
+├── drawable/                # アイコン（VectorDrawable）
+└── ...
+docs/
+├── architecture.html        # この文書
+└── test-architecture.html
+```
+
+## アーキテクチャ方針
+
+**レイヤを切らず、役割ごとの 1 ファイルで構成する。** ファイル数が 15 本前後の規模でパッケージを分けても、境界の維持コストのほうが上回る。切り出すのは `tools/` だけ（後述）。
+
+**Activity は表示だけを持つ。** `MainActivity` は `Conversation.Ui` を実装して字幕と状態を描くだけで、音声も WebSocket も触らない。会話の制御は `Conversation` が持ち、Phase 1 で Foreground Service へ移す（下記）。
+
+**外部サービスごとに 1 クライアント。** Gemini、Home Assistant、Open-Meteo、Immich はそれぞれ独立したクラスが HTTP を話し、アプリ内の型に変換して返す。共通の HTTP 抽象は作らない。
+
+**端末は 1 台しかない。** 画面サイズ（960x480）・ABI・Android バージョンを分岐で吸収する必要がないので、汎用化はしない。
+
+## モジュール境界と依存方向
+
+依存は上から下へ一方向に流れる。
+
+```
+Activity / View  ──▶  Conversation  ──▶  GeminiLiveClient / AudioIo
+                              │
+                              └────────▶  tools/*  ──▶  各サービスのクライアント
+                                              │
+Settings / Usage  ◀───────────────────────────┘
+```
+
+- **View は `Conversation` より下を知らない。** `MainActivity` が `GeminiLiveClient` や `AudioIo` を直接触ることはない
+- **`tools/` は UI を知らない。** 道具は引数の JSON を受け取り結果の JSON を返すだけで、画面や Activity に触らない。画面の切り替えが要る操作は、`Conversation` が結果を見て UI に伝える
+- **`Settings` / `Usage` はどこからでも読んでよい。** どちらも SharedPreferences の薄いラッパで、状態を持たない
+- **逆流を作らない。** `GeminiLiveClient` が `Conversation` を呼ぶことはなく、リスナ経由で通知するだけ
+
+### tools/ の規約
+
+Gemini の function calling で公開する道具は `tools/` にまとめる。理由は数が増えるのが分かっているから（時刻・天気・Home Assistant 操作・機器の状態・機器一覧・音楽操作…）。1 道具 1 ファイルで、宣言（`FunctionDeclaration` の JSON）と実行を同じファイルに置く。登録は `tools/ToolRegistry.kt` が一括で行い、`Conversation` はレジストリ越しにしか道具を知らない。
+
+## 音声パイプラインとハーフデュプレックス制約
+
+```
+マイク  ──▶ AudioRecord (16 kHz PCM16)
+              │
+              ├── speaker.busy() が true の間は破棄  ◀── ここが要
+              │
+              └──▶ realtimeInput (base64) ──▶ Gemini Live
+                                                   │
+        AudioTrack (24 kHz PCM16) ◀── inlineData ◀──┘
+```
+
+**この端末にはエコーキャンセラが存在しない。** `audio_effects.xml` に `aec` / `ns` のエフェクトが登録されておらず（`libaudiopreprocessing.so` はあるが宣言がコメントアウトされたまま）、`AcousticEchoCanceler.isAvailable()` は false を返す。マイクはスピーカーの音をそのまま拾うため、何もしないとモデルが自分の声をユーザー発話として文字起こしし、自分の返答に返答し続ける。
+
+対策として**スピーカーが鳴っている間はマイクの音を一切送らない**（`AudioIo.kt` の `SpeakerStream.busy()`）。判定は AudioTrack の内部状態を見ず、「渡した音声が鳴り終わる実時刻」を自前で持つ。`playbackHeadPosition` は `flush()` でリセットされる保証がなく、一度割り込みが起きると判定が壊れたまま戻らないため。鳴り終わってからの余白は 600 ms（部屋の残響と AudioTrack 自体のバッファ遅延の両方を吸う）。
+
+**代償として喋りかぶせ（barge-in）はできない。** 代わりに画面タップで再生中の返答を捨てる（`Conversation.hush()`）。ソフトウェア AEC（WebRTC AudioProcessing）を積むのが上位互換だが、割り込みが本当に必要と分かるまでは入れない。
+
+## エラーハンドリング
+
+**壁に掛けっぱなしの端末なので、アプリを落とさないことを最優先する。**
+
+- 外部 I/O（HTTP・WebSocket・音声デバイス）の失敗は捕まえて `Log` に出し、必要なら Toast で伝える。機能が 1 つ死んでもアプリは生き残る
+- 復旧できない状態は「未設定」に倒す。例: Keystore の鍵が失われて API キーを復号できないとき、`Settings.secret()` は例外を投げず空文字を返す（起動のたびにクラッシュするより、設定画面で入れ直せるほうがよい）
+- 解釈できないサーバーメッセージは捨てて先に進む（`GeminiLiveClient.handle()`）
+- `Result` 型や独自の sealed class は導入しない。コールバック中心の今の形と相性が悪い
+
+ログのタグは全ファイル共通で `Hachi`。`adb logcat -s Hachi` で追える。
+
+## 設定と秘密情報
+
+- すべて 1 つの SharedPreferences (`settings`) に入れる。読み書きは `Settings` 経由のみ
+- **秘密情報は `secret()` / `setSecret()` を必ず使う。** Android Keystore の AES/GCM 鍵で暗号化し、`<Base64 IV>:<Base64 暗号文>` の形で保存する。API キー・アクセストークンを平文で `set()` しない
+- 変更は即座に保存する（設定画面に「適用」はない）
+- `allowBackup=false`。鍵を端末外に出さない
+
+## 料金計上
+
+Live API がセッション中に送る `usageMetadata` のトークン数から積算する。Cloud Billing は数時間遅れるので参照しない。
+
+- 届くたびにモダリティ別（TEXT / AUDIO / IMAGE / VIDEO）の単価を掛け、**日次と月次のドル額**に足す。トークン数は保存せず金額だけ持つので、月の途中でモデルを変えても合算が狂わない
+- カウントは**セッション累計**として扱い、前回との差分だけ課金する（要検証: 差分報告だった場合は過小計上になる。生の `usageMetadata` をログに出してある）
+- **内訳に現れない分と `thoughtsTokenCount` も必ず計上する。** どちらも実測で漏れが見つかった。見積もりが実際より低く出るほうが害が大きいので、不明分は高いほうに倒す
+- 日次上限に達したら会話を始めさせず、会話中に超えたらその場で終了する
+
+## 端末固有の制約
+
+| 制約 | 内容 |
+|------|------|
+| 機種 | Echo Show 5 (2nd gen) / コードネーム `cronos` |
+| OS | LineageOS 18.1 (Android 11 / API 30) |
+| ABI | armeabi-v7a（32bit）。ネイティブライブラリは必ずこれを含める |
+| 画面 | 960x480 横固定、density 195 |
+| エコーキャンセラ | **なし**（上記「音声パイプライン」参照） |
+| HOME 候補 | マニフェストに HOME インテントフィルタを持つが、既定ランチャーは自動で変更しない |
+
+## 今後の Phase
+
+| Phase | 内容 | 状態 |
+|-------|------|------|
+| 0 | 骨組みと時計 | 完了 |
+| 2 | Gemini Live 会話・料金計上・設定画面 | 完了 |
+| 1 | ウェイクワード常時待受（Julius の成果物を butler から流用）。**会話と検出を Foreground Service に移し、Activity は表示だけにする** | 未着手 |
+| 3 | 道具: 時刻 / 天気 (Open-Meteo) / Home Assistant 操作・状態取得 / Spotify (HA の `media_player` 経由) | 未着手 |
+| 4 | ホーム画面のページャ（時計・天気・スマートホーム・音楽・フォト） | 未着手 |
+| 5 | Immich フォトフレーム | 未着手 |
+
+Google フォトは選択肢から外した。`photoslibrary.readonly` が 2025-03-31 に廃止され、フォトフレーム向けの Ambient API はパートナー審査が前提で、一般開発者に残る Picker API では自動更新ができないため。
+</script>
+<script>
+const DATA = {"project":"Hachi","updatedAt":"2026-09-17","featureModel":"docs/feature-model.json","context":{"system":{"name":"Hachi","description":"Echo Show 5 (2nd gen) の LineageOS 上で常時動く、壁掛けの音声 AI アシスタント。サーバーを持たず、端末から各サービスへ直接つなぐ。"},"actors":[{"id":"resident","name":"住人","kind":"human","description":"壁に掛かった端末の前に立つ人。会話も設定も同じ 1 人が行う。","goals":["話しかけて用を足す","時計・天気・雨雲をひと目で見る","返答が長すぎるとき黙らせる","いくら使ったか把握し、上限を決める","天気を引く場所とモデル・声を選ぶ"]},{"id":"gemini-model","name":"Gemini モデル","kind":"system","description":"会話の向こう側。足りない事実があると function calling で端末側の道具を呼び返してくる。この向きだけはアプリが呼ばれる側になる。","goals":["いまの時刻を取る","設定された場所の天気と 1 時間先の雨を取る"]},{"id":"refresh-timer","name":"更新タイマー","kind":"system","description":"画面が出ている間だけ 15 分ごとに回る端末内のタイマー。伏せられている間は止まる。","goals":["天気の写しを古くしない"]},{"id":"developer","name":"開発機","kind":"system","description":"adb でつながった開発用の PC。debug ビルドにだけ届く。","goals":["5 インチの画面で打つには長すぎる値を設定に流し込む","空の情景を固定して見た目を確かめる"]}],"externals":[{"id":"gemini-live","name":"Gemini Live API","kind":"api","direction":"bidirectional","protocol":"WebSocket (BidiGenerateContent, v1beta)","criticality":"high","description":"会話そのもの。音声を上げて音声・両側の文字起こし・道具呼び出し・使用報告が下りてくる。ターン判定はサーバー側 VAD。","refs":[{"path":"app/src/main/java/dev/polidog/hachi/GeminiLiveClient.kt"}]},{"id":"gemini-models","name":"Gemini ListModels","kind":"api","direction":"outbound","protocol":"REST (v1beta)","criticality":"low","description":"会話に使えるモデルの一覧。落ちても内蔵の既定一覧に倒れるだけ。","refs":[{"path":"app/src/main/java/dev/polidog/hachi/ModelCatalog.kt"}]},{"id":"open-meteo","name":"Open-Meteo","kind":"api","direction":"outbound","protocol":"REST","criticality":"medium","description":"予報とジオコーディング。アカウントも鍵も要らず全世界。温度と日単位の予報を担う。","refs":[{"path":"app/src/main/java/dev/polidog/hachi/Weather.kt"}]},{"id":"yahoo-yolp","name":"Yahoo! Japan 気象情報 (YOLP)","kind":"api","direction":"outbound","protocol":"REST","criticality":"low","description":"10 分刻み・60 分先までの雨量。日本限定で application id が要る。未設定ならこの半分だけ黙って落ちる。","refs":[{"path":"app/src/main/java/dev/polidog/hachi/RainRadar.kt"}]},{"id":"jma-nowcast","name":"気象庁 高解像度降水ナウキャスト","kind":"api","direction":"outbound","protocol":"REST (XYZ タイル + targetTimes JSON)","criticality":"low","description":"雨雲レーダーのタイルと、描けるコマの時刻一覧。","refs":[{"path":"app/src/main/java/dev/polidog/hachi/RadarTiles.kt"}]},{"id":"gsi-tiles","name":"地理院タイル（淡色地図）","kind":"api","direction":"outbound","protocol":"REST (XYZ タイル)","criticality":"low","description":"雨雲を重ねる下地の地図。取得したタイルは端末のキャッシュに 32 MB まで置く。","refs":[{"path":"app/src/main/java/dev/polidog/hachi/RadarTiles.kt"}]},{"id":"android-keystore","name":"Android Keystore","kind":"auth","direction":"outbound","protocol":"AES/GCM","criticality":"high","description":"秘密を包む鍵の置き場。鍵が消えたり入れ替わったりすると復号できない暗号文が残るので、そのときは未設定として扱う。","refs":[{"path":"app/src/main/java/dev/polidog/hachi/Settings.kt","line":60}]},{"id":"android-audio","name":"端末の音声デバイス","kind":"other","direction":"bidirectional","protocol":"AudioRecord 16 kHz PCM16 / AudioTrack 24 kHz PCM16","criticality":"high","description":"マイクとスピーカー。この端末にはエコーキャンセラが存在せず、マイクがスピーカーの音をそのまま拾う。","refs":[{"path":"app/src/main/java/dev/polidog/hachi/AudioIo.kt"}]}]},"domain":{"contexts":[{"id":"conversation","name":"会話","description":"話しかけてから閉じるまで。音声の往復と道具の呼び出しがここに閉じている。","entities":[{"id":"conversation.session","name":"会話","kind":"aggregate-root","description":"1 回の会話。WebSocket セッション 1 本と 1 対 1 で、料金の計上単位でもある。","attributes":[{"name":"state","type":"State","required":true,"description":"接続中 / 待受中 / 終了"},{"name":"model","type":"String","required":true,"description":"開始時に設定から取ったモデル名。途中では変わらない"},{"name":"voice","type":"String","required":true,"description":"プリセット音声名"},{"name":"languageCode","type":"String","required":true,"description":"端末ロケールから ja-JP か en-US"},{"name":"silenceTimeout","type":"Long","required":true,"description":"無音で閉じるまでの秒数"}],"invariants":["API キーが未設定なら会話は始まらない","今日の使用額が日次上限に達していれば会話は始まらない","同時に開いている会話は高々 1 つ","会話が閉じたらマイク・スピーカー・WebSocket・音声モードのすべてが解放されている","画面が伏せられたら会話は閉じる"],"lifecycle":{"initial":"connecting","states":[{"id":"connecting","name":"接続中"},{"id":"listening","name":"待受中"},{"id":"ended","name":"終了"}],"transitions":[{"from":"connecting","to":"listening","trigger":"setupComplete が届く","usecase":"talk-to-hachi"},{"from":"listening","to":"ended","trigger":"無音のまま silenceTimeout 秒が過ぎる","usecase":"end-on-silence"},{"from":"listening","to":"ended","trigger":"終了ボタンが押される","usecase":"talk-to-hachi"},{"from":"listening","to":"ended","trigger":"今日の使用額が上限を超える","usecase":"cap-the-spend"},{"from":"listening","to":"ended","trigger":"サーバーが goAway を送るか接続が切れる","usecase":"talk-to-hachi"},{"from":"connecting","to":"ended","trigger":"接続に失敗する","usecase":"talk-to-hachi"}]},"features":["voice.conversation","voice.conversation.start.button","voice.conversation.end.manual"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Conversation.kt","line":17}]},{"id":"conversation.audio-stream","name":"音声の往復","kind":"entity","description":"マイクから上がる 16 kHz PCM と、スピーカーから出る 24 kHz PCM。片方が鳴っている間はもう片方を止める。","attributes":[{"name":"speakerBusyUntil","type":"Long","required":true,"description":"渡した音声が鳴り終わる実時刻の見積もり"},{"name":"tailMs","type":"Int","required":true,"description":"鳴り終わってから開けるまでの余白。600 ms"}],"invariants":["スピーカーが鳴っている間、マイクの音は 1 バイトも送られない","鳴り終わり時刻は AudioTrack の内部位置ではなく渡した量から自前で数える（flush で壊れるため）","黙らせても会話は閉じない"],"features":["voice.half-duplex","voice.half-duplex.gate","voice.hush"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/AudioIo.kt"}]},{"id":"conversation.caption","name":"字幕","kind":"value-object","description":"会話中に画面へ流れる文字起こしの断片。誰の発話かと本文だけを持つ。","attributes":[{"name":"speaker","type":"user | assistant","required":true,"description":""},{"name":"text","type":"String","required":true,"description":"断片で届くので追記して繋ぐ"}],"invariants":["字幕は会話が閉じると消える（履歴として残さない）"],"features":["voice.conversation.caption"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/ConversationView.kt"}]},{"id":"conversation.tool","name":"道具","kind":"entity","description":"モデルに公開する関数。名前・宣言（JSON）・実行を 1 か所に持つ。","attributes":[{"name":"name","type":"String","required":true,"description":"モデルから呼ばれる名前"},{"name":"declaration","type":"JSONObject","required":true,"description":"setup で送る functionDeclaration"}],"invariants":["道具は画面にも Activity にも触らない","道具の失敗は例外として投げず、失敗としてモデルに返る","道具の名前はレジストリの中で一意"],"features":["voice.tools"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/tools/Tool.kt"},{"path":"app/src/main/java/dev/polidog/hachi/tools/ToolRegistry.kt","line":9}]},{"id":"conversation.tool-call","name":"道具の呼び出し","kind":"value-object","description":"モデルからの 1 回の関数呼び出しと、それに返す結果。","attributes":[{"name":"id","type":"String","required":true,"description":"結果を返すときにそのまま返す"},{"name":"name","type":"String","required":true,"description":"呼ばれた道具の名前"},{"name":"args","type":"JSONObject","required":true,"description":"引数。無ければ空"}],"invariants":["呼び出しは必ず同じ id で返す","道具は網を触るので、ソケットの読み取りスレッドでは実行しない"],"features":["voice.tools"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/GeminiLiveClient.kt","line":188}]}],"relations":[{"from":"conversation.session","to":"conversation.audio-stream","kind":"has-one","name":"音声","description":"会話が開いている間だけ存在する"},{"from":"conversation.session","to":"conversation.caption","kind":"has-many","name":"字幕","description":""},{"from":"conversation.session","to":"conversation.tool","kind":"has-many","name":"公開する道具","description":"開始時にレジストリの宣言をまとめて送る"},{"from":"conversation.tool-call","to":"conversation.tool","kind":"references","name":"呼ぶ道具","description":"名前で引く"}]},{"id":"weather","name":"天気","description":"外から取ってきた気象を、画面にも道具にも同じ形で渡すところ。2 つの出どころが別の問いに答える。","entities":[{"id":"weather.snapshot","name":"天気の写し","kind":"aggregate-root","description":"アプリ全体で 1 部だけ持つ天気の現在値。画面も道具もこれを見る。","attributes":[{"name":"place","type":"Place?","required":false,"description":"未設定なら天気そのものが出ない"},{"name":"forecast","type":"Forecast?","required":false,"description":"取れなければ null"},{"name":"rain","type":"List\u003cRainPoint>","required":true,"description":"未設定・日本国外・取得失敗なら空"},{"name":"failed","type":"Boolean","required":true,"description":"直近の予報取得が失敗したか"}],"invariants":["場所が未設定なら予報も雨の列も空になる","写しは 15 分より古くならない（画面が出ている間）","画面が伏せられている間は取り直さない"],"features":["weather.refresh"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/WeatherStore.kt","line":9}]},{"id":"weather.place","name":"場所","kind":"value-object","description":"天気を引く 1 地点。表示名と緯度経度。","attributes":[{"name":"name","type":"String","required":true,"description":"「渋谷, 東京都, 日本」のように、同名を見分けられる長さで持つ"},{"name":"latitude","type":"Double","required":true,"description":""},{"name":"longitude","type":"Double","required":true,"description":""}],"invariants":["名前・緯度・経度の 3 つが揃って初めて場所として成立する（1 つでも欠ければ未設定）"],"features":["weather.place"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Weather.kt","line":10}]},{"id":"weather.forecast","name":"予報","kind":"entity","description":"いまの気温と天気コード、それに 3 日分の日単位の予報。","attributes":[{"name":"temperature","type":"Double","required":true,"description":"摂氏。取れなければ NaN"},{"name":"code","type":"Int","required":true,"description":"WMO 天気コード。不明なら -1"},{"name":"isDay","type":"Boolean","required":true,"description":""},{"name":"days","type":"List\u003cDay>","required":true,"description":"今日から 3 日"}],"invariants":["形が想定と違うレスポンスは部分的に読まず、予報そのものを無しとして扱う"],"features":["weather.forecast"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Weather.kt","line":16}]},{"id":"weather.day","name":"1 日の予報","kind":"value-object","description":"日付・最高・最低・天気コード・降水確率。","attributes":[{"name":"date","type":"String","required":true,"description":""},{"name":"high","type":"Double","required":true,"description":""},{"name":"low","type":"Double","required":true,"description":""},{"name":"code","type":"Int","required":true,"description":""},{"name":"rainChance","type":"Int","required":true,"description":"%。API が出さなければ -1（0% ではなく不明）"}],"invariants":["降水確率の欠落は 0% ではなく不明として残す"],"features":["weather.forecast"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Weather.kt","line":13}]},{"id":"weather.rain-series","name":"雨の列","kind":"entity","description":"10 分刻み・60 分先までの雨量。先頭が「いま」で、実測と予測が混ざる。","attributes":[{"name":"points","type":"List\u003cRainPoint>","required":true,"description":"分オフセット・mm/h・実測かどうか"}],"invariants":["分オフセットは端末の時計ではなく列の先頭から数える（サーバーの「いま」と数分ずれうるため）","application id が未設定なら列は空になり、天気そのものは出続ける"],"features":["weather.rain-nowcast"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/RainRadar.kt","line":13}]},{"id":"weather.rain-summary","name":"雨の要約","kind":"value-object","description":"雨の列を、口に出す価値のある事実だけに畳んだもの。","attributes":[{"name":"rainingNow","type":"Boolean","required":true,"description":"先頭の読みが 0 より大きいか"},{"name":"startsInMinutes","type":"Int?","required":false,"description":"いま降っていないときだけ入る"},{"name":"stopsInMinutes","type":"Int?","required":false,"description":"いま降っているときだけ入る"},{"name":"resumesInMinutes","type":"Int?","required":false,"description":"止んだあと 1 時間以内に戻るとき"},{"name":"peakMmPerHour","type":"Double","required":true,"description":""}],"invariants":["降り出しと止みが同時に入ることはない（訊かれていない切れ目を語らないため）","止むことだけを言って戻りを黙らない（晴れた 1 時間に聞こえてしまうため）"],"features":["weather.rain-nowcast.summary"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/RainRadar.kt","line":85}]},{"id":"weather.sky-scene","name":"情景","kind":"enum","description":"空を描くために WMO 天気コードを畳んだ 7 区分。","attributes":[{"name":"value","type":"SkyScene","required":true,"description":"CLEAR / PARTLY_CLOUDY / CLOUDY / FOG / RAIN / SNOW / THUNDER"}],"invariants":["知らないコードは快晴に倒す（描けない情景を作らない）"],"features":["display.sky.weather-wash"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/SkyScene.kt","line":4}]}],"relations":[{"from":"weather.snapshot","to":"weather.place","kind":"has-one","name":"場所","description":""},{"from":"weather.snapshot","to":"weather.forecast","kind":"has-one","name":"予報","description":""},{"from":"weather.snapshot","to":"weather.rain-series","kind":"has-one","name":"雨の列","description":""},{"from":"weather.forecast","to":"weather.day","kind":"has-many","name":"日ごと","description":"3 日分"},{"from":"weather.rain-summary","to":"weather.rain-series","kind":"references","name":"畳む対象","description":""},{"from":"weather.sky-scene","to":"weather.forecast","kind":"references","name":"天気コードの出どころ","description":""}]},{"id":"spend","name":"料金","description":"会話がいくらかかったか。トークン数ではなくドル額だけを持ち、Cloud Billing は見ない。","entities":[{"id":"spend.ledger","name":"使用額","kind":"aggregate-root","description":"日ごと・月ごとに積んだドル額。トークン数は残さない。","attributes":[{"name":"todayUsd","type":"Double","required":true,"description":""},{"name":"monthUsd","type":"Double","required":true,"description":""},{"name":"baseline","type":"Map\u003cString, Long>","required":true,"description":"セッション中だけ持つ、側×モダリティごとの前回累計"}],"invariants":["保存するのはドル額だけで、トークン数は残さない（月の途中でモデルを変えても合算が狂わない）","計上するのは前回の報告からの増分だけ。数が減っていたらセッションが張り直されたとみて額面どおり計上する","内訳に現れない分と思考トークンも必ず計上する。見積もりが実際より低く出るほうが害が大きい","会話が閉じたらセッションの前回累計は忘れる"],"features":["spend.metering","spend.metering.unknown-high"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Usage.kt","line":17}]},{"id":"spend.rate-card","name":"単価表","kind":"value-object","description":"モデル別・入出力別・モダリティ別の 100 万トークンあたりドル単価。","attributes":[{"name":"input","type":"Map\u003cString, Double>","required":true,"description":"TEXT / AUDIO / IMAGE / VIDEO"},{"name":"output","type":"Map\u003cString, Double>","required":true,"description":"同上"}],"invariants":["表にないモデルは高いほうの単価で見る（知らないモデルで静かに安く出さない）"],"features":["spend.metering.modality"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Usage.kt","line":75}]},{"id":"spend.usage-report","name":"使用報告","kind":"value-object","description":"Live API がセッション中に送ってくるトークン数。セッションの累計として扱う。","attributes":[{"name":"promptTokenCount","type":"Long","required":true,"description":""},{"name":"responseTokenCount","type":"Long","required":true,"description":""},{"name":"thoughtsTokenCount","type":"Long","required":false,"description":"内訳にも総数にも現れない。出力側に手で足す"},{"name":"promptTokensDetails","type":"JSONArray?","required":false,"description":"モダリティ別の内訳。合計は総数に届かない"},{"name":"responseTokensDetails","type":"JSONArray?","required":false,"description":"同上"}],"invariants":["内訳の合計と総数の差は捨てずにテキスト単価で計上する"],"features":["spend.metering"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Usage.kt","line":108}]},{"id":"spend.daily-cap","name":"日次上限","kind":"value-object","description":"今日の使用額の天井。","attributes":[{"name":"usd","type":"Double","required":true,"description":"0 なら無制限。負の値は 0 に丸める"}],"invariants":["上限に達していたら会話を始めさせない","会話中に超えたら文の途中でもその場で閉じる"],"features":["spend.daily-cap","voice.conversation.end.cap"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Settings.kt","line":52}]}],"relations":[{"from":"spend.ledger","to":"spend.usage-report","kind":"references","name":"積む元","description":""},{"from":"spend.ledger","to":"spend.rate-card","kind":"references","name":"掛ける単価","description":"報告が届いた時点のモデルの単価"},{"from":"spend.daily-cap","to":"spend.ledger","kind":"references","name":"比べる相手","description":""}]},{"id":"settings","name":"設定","description":"ユーザーに見える値ぜんぶ。1 つの SharedPreferences に入り、秘密だけ暗号化して入る。","entities":[{"id":"settings.preferences","name":"設定","kind":"aggregate-root","description":"SharedPreferences 1 つ。読み書きはここ経由だけ。","attributes":[{"name":"geminiKey","type":"Secret","required":false,"description":"未設定なら会話が始まらない"},{"name":"yahooAppId","type":"Secret","required":false,"description":"未設定なら雨の列だけが落ちる"},{"name":"model","type":"String","required":true,"description":"既定 gemini-3.8-live"},{"name":"voice","type":"String","required":true,"description":"既定 Aoede"},{"name":"silenceTimeout","type":"Long","required":true,"description":"既定 30 秒。5〜600 に丸める"},{"name":"dailyCap","type":"Double","required":true,"description":"既定 $0.50。0 で無制限"},{"name":"weatherPlace / weatherLat / weatherLon","type":"String","required":false,"description":"3 つ揃って初めて場所になる"},{"name":"radarZoom","type":"Int","required":false,"description":"最後に選んだレーダーの縮尺"}],"invariants":["秘密は必ず暗号化して入る。API キーとアクセストークンを平文で書かない","変更は触った時点で保存される（「適用」はない）","端末の外へは出さない（allowBackup=false）"],"features":["config.screen","config.backup-off"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Settings.kt","line":18}]},{"id":"settings.secret","name":"秘密","kind":"value-object","description":"Keystore の鍵で包んだ値。`\u003cBase64 IV>:\u003cBase64 暗号文>` の形で保存される。","attributes":[{"name":"iv","type":"String","required":true,"description":""},{"name":"ciphertext","type":"String","required":true,"description":""}],"invariants":["復号できない秘密は例外ではなく未設定として返す（起動のたびに落ちるより入れ直せるほうがよい）","画面に出すのは末尾 4 文字だけ。2 つの鍵を見分けられる以上のことはしない"],"features":["config.secret-storage"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Settings.kt","line":75}]},{"id":"settings.model-catalog","name":"モデル一覧","kind":"entity","description":"会話に使える Gemini モデルの候補。","attributes":[{"name":"names","type":"List\u003cString>","required":true,"description":"models/ を外した名前。並べ替えてある"}],"invariants":["bidiGenerateContent を名乗るモデルだけを載せる","取れないとき・空のときは内蔵の既定一覧に倒す"],"features":["voice.model","voice.model.catalog","voice.model.fallback"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/ModelCatalog.kt","line":14}]}],"relations":[{"from":"settings.preferences","to":"settings.secret","kind":"has-many","name":"秘密","description":""},{"from":"settings.preferences","to":"settings.model-catalog","kind":"references","name":"選べるモデル","description":""}]},{"id":"display","name":"画面","description":"壁に掛かって見えているもの。ページャと、その背後の空と、レーダーの地図。","entities":[{"id":"display.home","name":"ホーム","kind":"aggregate-root","description":"横スワイプで切り替わるページの束と、その上に重なる会話オーバーレイ・使用額・設定ボタン。","attributes":[{"name":"currentPage","type":"Int","required":true,"description":"0=時計 1=天気 2=雨雲"},{"name":"pageCount","type":"Int","required":true,"description":"現在 3"}],"invariants":["画面は消えない（壁掛けなので常時点いている）","会話中はトークボタンを隠し、終わったら戻す","どのページの上でも文字が読める（淡色地図の上でも白飛びしない）"],"features":["display.pager","display.always-on"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/MainActivity.kt","line":21},{"path":"app/src/main/java/dev/polidog/hachi/PagerView.kt"}]},{"id":"display.day-palette","name":"昼のパレット","kind":"value-object","description":"ある時刻における空の 3 色（上・中・下）。","attributes":[{"name":"top","type":"Int","required":true,"description":""},{"name":"middle","type":"Int","required":true,"description":""},{"name":"bottom","type":"Int","required":true,"description":""}],"invariants":["キーフレームの間はチャンネルごとに補間する（夜明けと日暮れで飛ばない）","1 日は巡る。最後のキーフレームは真夜中へ戻る","天気で褪せても時刻は透けて残る（曇りの昼は曇りの夕方より明るい）"],"features":["display.sky","display.sky.time-of-day"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/DayPalette.kt","line":9},{"path":"app/src/main/java/dev/polidog/hachi/SkyScene.kt","line":36}]},{"id":"display.map-tile","name":"タイル","kind":"value-object","description":"Web Mercator の 1 枚。淡色地図と雨雲で同じ座標を使う。","attributes":[{"name":"zoom","type":"Int","required":true,"description":""},{"name":"x","type":"Int","required":true,"description":""},{"name":"y","type":"Int","required":true,"description":""}],"invariants":["端末密度に合わせて拡大せず原寸で描く","取れなかったタイルは穴として残し、ページ全体を落とさない"],"features":["display.radar-map"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/RadarTiles.kt","line":18}]},{"id":"display.radar-frame","name":"コマ","kind":"entity","description":"ナウキャストの 1 時刻分。いまは現在のコマだけを描く。","attributes":[{"name":"basetime","type":"String","required":true,"description":"targetTimes が返す時刻文字列"}],"invariants":["描くのは現在のコマだけ（過去と先 1 時間も出ているが、20 コマ分のタイルを抱えることになるので待つ）"],"features":["display.radar-map","display.radar-map.animation"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/RadarTiles.kt","line":44}]}],"relations":[{"from":"display.home","to":"display.day-palette","kind":"references","name":"背後の空","description":""},{"from":"display.radar-frame","to":"display.map-tile","kind":"has-many","name":"タイル","description":""}]}],"contextRelations":[{"from":"conversation","to":"settings","kind":"conformist","description":"会話は開始時に設定を読むだけで、設定の形に合わせる。設定を書き換えることはない"},{"from":"conversation","to":"spend","kind":"upstream-downstream","description":"会話が使用報告を流し、料金が積む。上限に達したことは会話へ返ってきて会話を閉じる"},{"from":"conversation","to":"weather","kind":"anti-corruption-layer","description":"道具（get_weather）が天気の形をモデル向けの JSON に翻訳する。会話は天気の型を直に扱わない"},{"from":"spend","to":"settings","kind":"conformist","description":"日次上限は設定から読む"},{"from":"weather","to":"settings","kind":"conformist","description":"場所と Yahoo! application id は設定から読む"},{"from":"settings","to":"weather","kind":"upstream-downstream","description":"場所を選ぶ画面はジオコーディングで得た場所をそのまま設定へ書く"},{"from":"display","to":"weather","kind":"upstream-downstream","description":"3 ページとも天気の写しを見て描く。空の退色も情景から来る"},{"from":"display","to":"conversation","kind":"upstream-downstream","description":"ホームが会話を開始し、状態・字幕・使用額を受け取って描く。逆向きには画面を知らない"},{"from":"display","to":"spend","kind":"conformist","description":"使用額の表示は料金が整えた文字列をそのまま出す"},{"from":"display","to":"settings","kind":"conformist","description":"レーダーの縮尺だけは設定に覚えさせる"}]},"usecases":[{"id":"talk-to-hachi","name":"話しかける","actor":"resident","context":"conversation","status":"done","description":"トークボタンから会話を張り、音声を往復させ、閉じる。","trigger":"トークボタンを押す","entrypoints":[{"kind":"ui","value":"ホーム下部のトークボタン","ref":{"path":"app/src/main/java/dev/polidog/hachi/MainActivity.kt","line":135}}],"mainFlow":["マイク権限が未許可なら要求し、許可されたら続ける","API キーと今日の使用額を確かめ、どちらかが通らなければ理由を出して終わる","音声モードに入り、スピーカーとマイクを起こす","setup（モデル・声・言語・システム指示・道具の宣言・両側の文字起こし）を送り setupComplete を待つ","マイクの音を上げ、下りてきた音声を鳴らし、両側の文字起こしを字幕に流す","終了ボタン・無音・上限・切断のいずれかで閉じ、マイク・スピーカー・ソケット・音声モードを解放する"],"outcome":"会話が閉じ、使われた分が使用額に積まれ、トークボタンが戻っている","reads":["settings.preferences","spend.ledger","spend.daily-cap","conversation.tool"],"writes":["conversation.session","conversation.audio-stream","conversation.caption"],"externals":["gemini-live","android-audio"],"features":["voice.conversation","voice.conversation.start.button","voice.conversation.end.manual","voice.conversation.caption","voice.half-duplex","voice.half-duplex.gate","voice.voice-choice"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Conversation.kt","line":58},{"path":"app/src/main/java/dev/polidog/hachi/GeminiLiveClient.kt","line":59}]},{"id":"hush-the-reply","name":"返答を黙らせる","actor":"resident","context":"conversation","status":"done","description":"長すぎる返答を途中で捨てる。会話は続く。","trigger":"返答が鳴っている間に画面を触る","entrypoints":[{"kind":"ui","value":"会話オーバーレイのタップ","ref":{"path":"app/src/main/java/dev/polidog/hachi/ConversationView.kt"}}],"mainFlow":["再生待ちの音声をすべて落とす","鳴り終わり時刻をいまに戻し、送信ゲートを開ける","マイクの音がまた上がりはじめる"],"outcome":"返答が止まり、会話は待受中のまま続いている","reads":[],"writes":["conversation.audio-stream"],"externals":["android-audio"],"features":["voice.hush"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Conversation.kt","line":54}]},{"id":"end-on-silence","name":"無音で終わる","actor":"resident","context":"conversation","status":"done","description":"誰も喋らなくなった会話を勝手に閉じる。壁に掛かったまま課金され続けないように。","trigger":"どちらの発話も届かないまま silenceTimeout 秒が過ぎる","entrypoints":[{"kind":"event","value":"無音タイマーの満了","ref":{"path":"app/src/main/java/dev/polidog/hachi/Conversation.kt","line":149}}],"mainFlow":["ユーザーの文字起こし・モデルの文字起こし・ターン終了のいずれかが届くたびにタイマーを数え直す","どれも来ないまま設定の秒数が過ぎたら会話を閉じる"],"outcome":"会話が閉じ、トークボタンが戻っている","reads":["settings.preferences"],"writes":["conversation.session"],"externals":[],"features":["voice.conversation.end.silence"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Conversation.kt","line":46}]},{"id":"answer-with-time","name":"道具で時刻を答える","actor":"gemini-model","context":"conversation","status":"done","description":"モデルが現在時刻を訊いてきたときに端末の時計で答える。","trigger":"toolCall で get_current_time が呼ばれる","entrypoints":[{"kind":"event","value":"toolCall get_current_time","ref":{"path":"app/src/main/java/dev/polidog/hachi/tools/GetCurrentTimeTool.kt"}}],"mainFlow":["ソケットの読み取りスレッドを離れて別スレッドで走らせる","端末のロケールとタイムゾーンで現在時刻を組み立てる","同じ id で toolResponse を返す"],"outcome":"モデルが時刻を知った状態で返答を続けている","reads":["conversation.tool"],"writes":["conversation.tool-call"],"externals":[],"features":["voice.tools","voice.tools.time"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/tools/GetCurrentTimeTool.kt"}]},{"id":"answer-with-weather","name":"道具で天気を答える","actor":"gemini-model","context":"conversation","status":"done","description":"設定された場所の天気を、モデルが読める JSON にして返す。web 検索より先にこれを使わせる。","trigger":"toolCall で get_weather が呼ばれる","entrypoints":[{"kind":"event","value":"toolCall get_weather","ref":{"path":"app/src/main/java/dev/polidog/hachi/tools/GetWeatherTool.kt","line":33}}],"mainFlow":["場所が未設定なら weather_place_not_set を返して終わる","予報を取り、取れなければ weather_unavailable を返して終わる","現在・今日・明日を組み立てる（降水確率は不明なら入れない）","日本かつ application id があれば雨の列も取り、要約と 10 分刻みの並びを添える","同じ id で toolResponse を返す"],"outcome":"モデルが天気と、日本なら 1 時間先の雨まで知った状態で答えている","reads":["settings.preferences","weather.place","weather.forecast","weather.rain-series","weather.rain-summary","conversation.tool"],"writes":["conversation.tool-call"],"externals":["open-meteo","yahoo-yolp"],"features":["voice.tools","voice.tools.weather","weather.forecast","weather.rain-nowcast","weather.rain-nowcast.summary"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/tools/GetWeatherTool.kt"}]},{"id":"meter-the-spend","name":"使った分を積む","actor":"gemini-model","context":"spend","status":"done","description":"セッション中に届く使用報告から、その場でドル額を積む。","trigger":"usageMetadata が届く","entrypoints":[{"kind":"event","value":"usageMetadata","ref":{"path":"app/src/main/java/dev/polidog/hachi/GeminiLiveClient.kt","line":198}}],"mainFlow":["いまのモデルの単価表を引く（未知なら高いほうで見る）","入力と出力それぞれについて、モダリティ別の内訳に単価を掛ける","思考トークンを出力側に足し、内訳に現れない分はテキスト単価で足す","前回の累計との差だけを今日と今月のドル額に積む","画面の使用額表示を書き換える"],"outcome":"今日と今月のドル額が最新になっている","reads":["spend.usage-report","spend.rate-card"],"writes":["spend.ledger"],"externals":["gemini-live"],"features":["spend.metering","spend.metering.modality","spend.metering.unknown-high","spend.display"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Usage.kt","line":23}]},{"id":"cap-the-spend","name":"上限で止める","actor":"resident","context":"spend","status":"done","description":"今日の使用額が上限に達したら会話をさせない。始める前も、始まったあとも見る。","trigger":"会話を始めようとしたとき、および使用報告が届くたび","entrypoints":[{"kind":"ui","value":"トークボタン（開始時の判定）","ref":{"path":"app/src/main/java/dev/polidog/hachi/Conversation.kt","line":65}},{"kind":"event","value":"usageMetadata（会話中の判定）","ref":{"path":"app/src/main/java/dev/polidog/hachi/Conversation.kt","line":117}}],"mainFlow":["上限が 0 なら何もしない","今日の使用額と上限を比べる","達していれば、開始前なら始めさせず、会話中ならその場で閉じる","上限額を添えて画面に伝える"],"outcome":"上限を超えた日は会話が張られていない","reads":["spend.ledger","spend.daily-cap"],"writes":["conversation.session"],"externals":[],"features":["spend.daily-cap","voice.conversation.end.cap"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Usage.kt","line":56}]},{"id":"watch-the-spend","name":"いくら使ったか見る","actor":"resident","context":"spend","status":"done","description":"今日と今月のドル額を確かめる。","trigger":"ホームを見る、または設定を開く","entrypoints":[{"kind":"ui","value":"ホーム右上の使用額","ref":{"path":"app/src/main/java/dev/polidog/hachi/MainActivity.kt","line":51}},{"kind":"ui","value":"設定 > 使用額","ref":{"path":"app/src/main/java/dev/polidog/hachi/SettingsActivity.kt","line":188}}],"mainFlow":["今日と今月のドル額を読む","小数 3 桁で並べて出す（小さい数字でも動いて見えるように）"],"outcome":"いま何ドル使っているかが画面から読める","reads":["spend.ledger"],"writes":[],"externals":[],"features":["spend.display"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Usage.kt","line":59}]},{"id":"refresh-the-weather","name":"天気を取り直す","actor":"refresh-timer","context":"weather","status":"done","description":"アプリ全体で 1 部だけ持つ天気の写しを、画面が出ている間だけ 15 分ごとに更新する。","trigger":"画面が戻ってきたとき、およびその後 15 分ごと","entrypoints":[{"kind":"event","value":"onResume / 15 分タイマー","ref":{"path":"app/src/main/java/dev/polidog/hachi/WeatherStore.kt","line":45}}],"mainFlow":["場所が未設定なら空の写しを配って終わる","別スレッドで予報と雨の列を続けて取る","取れた結果（失敗フラグ込み）で写しを差し替える","天気ページ・レーダーページ・空に配る"],"outcome":"3 ページと空が同じ 1 部の天気を見ている","reads":["settings.preferences","weather.place"],"writes":["weather.snapshot","weather.forecast","weather.rain-series"],"externals":["open-meteo","yahoo-yolp"],"features":["weather.refresh","weather.forecast","weather.rain-nowcast"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/WeatherStore.kt","line":52}]},{"id":"see-the-clock","name":"時計を見る","actor":"resident","context":"display","status":"done","description":"既定のページ。空を背にした時計。","trigger":"ホームを見る","entrypoints":[{"kind":"ui","value":"ホーム 1 ページ目","ref":{"path":"app/src/main/java/dev/polidog/hachi/ClockView.kt"}}],"mainFlow":["いまの時刻からその時刻の空の 3 色を補間する","天気の情景でその色を褪せさせる","背後にグラデーションを敷き、時計を重ねる"],"outcome":"時刻と、いまの空模様が同じ画面から読める","reads":["weather.snapshot","weather.sky-scene","display.day-palette"],"writes":[],"externals":[],"features":["display.pager.clock","display.sky","display.sky.time-of-day","display.sky.weather-wash"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/ClockView.kt"},{"path":"app/src/main/java/dev/polidog/hachi/SkyView.kt"}]},{"id":"see-the-weather","name":"天気を見る","actor":"resident","context":"display","status":"done","description":"現在の気温と天気、今日と明日、あれば 1 時間先までの雨のタイムライン。","trigger":"ホームを 1 枚めくる","entrypoints":[{"kind":"ui","value":"ホーム 2 ページ目","ref":{"path":"app/src/main/java/dev/polidog/hachi/WeatherPage.kt"}}],"mainFlow":["場所が未設定なら、設定するよう促して終わる","現在の気温・天気と、今日・明日の最高／最低／降水確率を並べる","雨の列があれば 10 分刻みの帯として描き、要約を文にして添える","直近の取得が失敗していればそれと分かるように出す"],"outcome":"傘が要るかどうかが画面から分かる","reads":["weather.snapshot","weather.forecast","weather.day","weather.rain-series","weather.rain-summary"],"writes":[],"externals":[],"features":["display.pager.weather","weather.forecast","weather.rain-nowcast.timeline","weather.rain-nowcast.summary"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/WeatherPage.kt"},{"path":"app/src/main/java/dev/polidog/hachi/RainTimelineView.kt"},{"path":"app/src/main/java/dev/polidog/hachi/WeatherText.kt"}]},{"id":"see-the-radar","name":"雨雲を見る","actor":"resident","context":"display","status":"done","description":"設定した場所を中心に、淡色地図へ雨雲を重ねる。タップで縮尺が巡る。","trigger":"ホームを 2 枚めくる","entrypoints":[{"kind":"ui","value":"ホーム 3 ページ目（タップで縮尺切替）","ref":{"path":"app/src/main/java/dev/polidog/hachi/RadarPage.kt","line":28}}],"mainFlow":["描けるコマの時刻一覧を取り、いちばん新しいコマを選ぶ","場所を中心に、画面を覆うだけのタイル座標を数える","淡色地図と雨雲のタイルを取って重ねる（取れなかったタイルは穴のまま）","画面の幅が何 km かを出典表示の横に書く","タップされたら次の縮尺へ巡り、選んだ縮尺を覚える"],"outcome":"雨雲がどこにあってどちらへ向かっているかが、縮尺付きで見える","reads":["weather.snapshot","weather.place","display.radar-frame","display.map-tile","settings.preferences"],"writes":["settings.preferences"],"externals":["jma-nowcast","gsi-tiles"],"features":["display.pager.radar","display.radar-map","display.radar-map.zoom","display.radar-map.scale"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/RadarPage.kt"},{"path":"app/src/main/java/dev/polidog/hachi/RadarTiles.kt"}]},{"id":"choose-the-place","name":"天気の場所を選ぶ","actor":"resident","context":"settings","status":"done","description":"地名で検索して、天気とレーダーの中心になる 1 地点を決める。","trigger":"設定 > 場所 を開く","entrypoints":[{"kind":"ui","value":"設定 > 天気 > 場所","ref":{"path":"app/src/main/java/dev/polidog/hachi/SettingsActivity.kt","line":328}}],"mainFlow":["地名を打つ","ジオコーディングで候補を引く（同名を見分けられるよう県・国まで並べる）","1 つ選ぶと名前と緯度経度が保存される","ホームへ戻ると天気とレーダーがその場所で描き直される"],"outcome":"天気・レーダー・天気の道具のすべてが同じ場所を指している","reads":[],"writes":["settings.preferences","weather.place"],"externals":["open-meteo"],"features":["weather.place","config.screen"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Weather.kt","line":52}]},{"id":"set-credentials","name":"鍵を入れる","actor":"resident","context":"settings","status":"done","description":"Gemini の API キーと Yahoo! の application id を、暗号化して保存する。","trigger":"設定 > API キー / Yahoo! application id を開く","entrypoints":[{"kind":"ui","value":"設定 > 会話 > API キー","ref":{"path":"app/src/main/java/dev/polidog/hachi/SettingsActivity.kt","line":96}},{"kind":"ui","value":"設定 > 天気 > Yahoo! application id","ref":{"path":"app/src/main/java/dev/polidog/hachi/SettingsActivity.kt","line":157}}],"mainFlow":["Keystore の鍵を取り出す（無ければその場で作る）","値を AES/GCM で包み `\u003cIV>:\u003c暗号文>` として保存する","一覧には末尾 4 文字だけを出す"],"outcome":"鍵が平文でディスクに残っておらず、端末の外にも出ない","reads":[],"writes":["settings.preferences","settings.secret"],"externals":["android-keystore"],"features":["config.secret-storage","config.screen","config.backup-off"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Settings.kt","line":91}]},{"id":"choose-model-and-voice","name":"モデルと声を選ぶ","actor":"resident","context":"settings","status":"done","description":"会話に使う Live モデルとプリセット音声を選ぶ。","trigger":"設定 > モデル / 声 を開く","entrypoints":[{"kind":"ui","value":"設定 > 会話 > モデル","ref":{"path":"app/src/main/java/dev/polidog/hachi/SettingsActivity.kt","line":112}},{"kind":"ui","value":"設定 > 会話 > 声","ref":{"path":"app/src/main/java/dev/polidog/hachi/SettingsActivity.kt","line":125}}],"mainFlow":["API キーがあれば ListModels を引き、bidiGenerateContent を名乗るものだけに絞る","引けなければ内蔵の既定一覧を出す","モデルと声をそれぞれ 1 つ選ぶ","次の会話から使われる（進行中の会話は変わらない）"],"outcome":"次の会話が選んだモデルと声で始まる","reads":["settings.model-catalog"],"writes":["settings.preferences"],"externals":["gemini-models"],"features":["voice.model","voice.model.catalog","voice.model.fallback","voice.voice-choice","config.screen"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/ModelCatalog.kt","line":26}]},{"id":"set-limits","name":"上限と無音の秒数を決める","actor":"resident","context":"settings","status":"done","description":"1 日いくらまで使ってよいか、何秒黙ったら会話を切るかを決める。","trigger":"設定 > 日次上限 / 無音タイムアウト を開く","entrypoints":[{"kind":"ui","value":"設定 > 料金 > 日次上限","ref":{"path":"app/src/main/java/dev/polidog/hachi/SettingsActivity.kt","line":173}},{"kind":"ui","value":"設定 > 会話 > 無音タイムアウト","ref":{"path":"app/src/main/java/dev/polidog/hachi/SettingsActivity.kt","line":139}}],"mainFlow":["数字を打つ（空なら既定に戻る）","上限は 0 以上に、無音の秒数は 5〜600 に丸めて保存する","次に会話を始めるときから効く"],"outcome":"使いすぎと切り忘れの両方に天井がある","reads":[],"writes":["settings.preferences","spend.daily-cap"],"externals":[],"features":["spend.daily-cap","voice.conversation.end.silence","config.screen"],"refs":[{"path":"app/src/main/java/dev/polidog/hachi/Settings.kt","line":51}]},{"id":"push-setting-from-dev-machine","name":"開発機から設定を流し込む","actor":"developer","context":"settings","status":"done","description":"5 インチの画面で打つには長すぎる値を adb のブロードキャストで入れる。debug ビルドのみ。","trigger":"開発機で am broadcast を叩く","entrypoints":[{"kind":"event","value":"am broadcast -a dev.polidog.hachi.SET -e name \u003c名前> -e value \u003c値>","ref":{"path":"app/src/debug/java/dev/polidog/hachi/DebugSettingsReceiver.kt"}}],"mainFlow":["設定名を見る。知らない名前なら何も書かず、知っている名前を並べて返す","秘密の名前なら暗号化して、それ以外は平文で保存する","何を書いたかをログと Toast に出す"],"outcome":"長い鍵が端末に入っていて、打ち間違えた設定名は黙って通っていない","reads":[],"writes":["settings.preferences","settings.secret"],"externals":["android-keystore"],"features":["config.adb-input","config.secret-storage"],"refs":[{"path":"app/src/debug/java/dev/polidog/hachi/DebugSettingsReceiver.kt"}]}],"openQuestions":["要確認: 使用報告がセッション累計なのか 1 通ごとの差分なのかが実測できていない。差分だった場合は過小計上になる（Usage.kt の ponytail コメントと、生の usageMetadata をログに出してある）","要確認: 思考トークンが実際に出力として課金されているか。いまは課金される前提で出力側に足しており、外れていれば過大計上になる","要確認: Phase 1 で会話を Foreground Service へ移したあと、会話の所有者が Activity から Service に変わる。そのとき『画面が伏せられたら会話は閉じる』という不変条件は成り立たなくなるはずだが、代わりに何が会話を閉じるのかが決まっていない","要確認: Home Assistant / Immich の設定名（homeAssistantUrl / homeAssistantToken / immichUrl / immichKey / immichAlbum）は DebugSettingsReceiver に予約されているだけで、読む側がまだない"]};
+const FEATURES = {"voice.conversation":{"name":"会話セッション","domain":"音声会話","status":"done","type":"mandatory"},"voice.conversation.start":{"name":"会話の始めかた","domain":"音声会話","status":"in-progress","type":"mandatory"},"voice.conversation.start.button":{"name":"トークボタン","domain":"音声会話","status":"done","type":"or"},"voice.conversation.start.wake-word":{"name":"ウェイクワード常時待受","domain":"音声会話","status":"planned","type":"or"},"voice.conversation.end":{"name":"会話の終わりかた","domain":"音声会話","status":"done","type":"mandatory"},"voice.conversation.end.silence":{"name":"無音タイムアウト","domain":"音声会話","status":"done","type":"or"},"voice.conversation.end.manual":{"name":"終了ボタン","domain":"音声会話","status":"done","type":"or"},"voice.conversation.end.cap":{"name":"日次上限到達","domain":"音声会話","status":"done","type":"or"},"voice.conversation.caption":{"name":"字幕","domain":"音声会話","status":"done","type":"mandatory"},"voice.half-duplex":{"name":"ハーフデュプレックス","domain":"音声会話","status":"done","type":"mandatory"},"voice.half-duplex.gate":{"name":"送信ゲート","domain":"音声会話","status":"done","type":"alternative"},"voice.half-duplex.aec":{"name":"ソフトウェア AEC","domain":"音声会話","status":"planned","type":"alternative"},"voice.hush":{"name":"返答を捨てる","domain":"音声会話","status":"done","type":"mandatory"},"voice.model":{"name":"Live モデルの選択","domain":"音声会話","status":"done","type":"mandatory"},"voice.model.catalog":{"name":"ListModels から取得","domain":"音声会話","status":"done","type":"mandatory"},"voice.model.fallback":{"name":"内蔵の既定一覧","domain":"音声会話","status":"done","type":"mandatory"},"voice.voice-choice":{"name":"プリセット音声","domain":"音声会話","status":"done","type":"mandatory"},"voice.tools":{"name":"道具（function calling）","domain":"音声会話","status":"in-progress","type":"mandatory"},"voice.tools.time":{"name":"いまの時刻","domain":"音声会話","status":"done","type":"or"},"voice.tools.weather":{"name":"天気","domain":"音声会話","status":"done","type":"or"},"voice.tools.home-assistant":{"name":"Home Assistant 操作・状態取得","domain":"音声会話","status":"planned","type":"or"},"voice.tools.music":{"name":"音楽操作","domain":"音声会話","status":"planned","type":"or"},"voice.service":{"name":"Foreground Service 化","domain":"音声会話","status":"planned","type":"optional"},"weather.place":{"name":"場所の設定","domain":"天気","status":"done","type":"mandatory"},"weather.forecast":{"name":"予報","domain":"天気","status":"done","type":"mandatory"},"weather.rain-nowcast":{"name":"1 時間先までの雨","domain":"天気","status":"done","type":"optional"},"weather.rain-nowcast.summary":{"name":"要約","domain":"天気","status":"done","type":"mandatory"},"weather.rain-nowcast.timeline":{"name":"タイムライン表示","domain":"天気","status":"done","type":"mandatory"},"weather.refresh":{"name":"定期更新","domain":"天気","status":"done","type":"mandatory"},"display.pager":{"name":"ホームのページャ","domain":"画面","status":"in-progress","type":"mandatory"},"display.pager.clock":{"name":"時計","domain":"画面","status":"done","type":"or"},"display.pager.weather":{"name":"天気","domain":"画面","status":"done","type":"or"},"display.pager.radar":{"name":"雨雲レーダー","domain":"画面","status":"done","type":"or"},"display.pager.home":{"name":"スマートホーム","domain":"画面","status":"planned","type":"or"},"display.pager.music":{"name":"音楽","domain":"画面","status":"planned","type":"or"},"display.pager.photo":{"name":"フォトフレーム","domain":"画面","status":"planned","type":"or"},"display.sky":{"name":"背景の空","domain":"画面","status":"done","type":"mandatory"},"display.sky.time-of-day":{"name":"時刻でのグラデーション","domain":"画面","status":"done","type":"mandatory"},"display.sky.weather-wash":{"name":"天気での退色","domain":"画面","status":"done","type":"mandatory"},"display.radar-map":{"name":"レーダーの地図","domain":"画面","status":"done","type":"mandatory"},"display.radar-map.zoom":{"name":"縮尺の切替","domain":"画面","status":"done","type":"mandatory"},"display.radar-map.scale":{"name":"画面幅の実距離表示","domain":"画面","status":"done","type":"mandatory"},"display.radar-map.animation":{"name":"コマ送り","domain":"画面","status":"planned","type":"optional"},"display.always-on":{"name":"壁掛け表示","domain":"画面","status":"done","type":"mandatory"},"spend.metering":{"name":"積算","domain":"料金","status":"done","type":"mandatory"},"spend.metering.modality":{"name":"モダリティ別の単価","domain":"料金","status":"done","type":"mandatory"},"spend.metering.unknown-high":{"name":"不明分を高いほうに倒す","domain":"料金","status":"done","type":"mandatory"},"spend.display":{"name":"使用額の表示","domain":"料金","status":"done","type":"mandatory"},"spend.daily-cap":{"name":"日次上限","domain":"料金","status":"done","type":"optional"},"config.screen":{"name":"設定画面","domain":"設定","status":"done","type":"mandatory"},"config.secret-storage":{"name":"秘密情報の保管","domain":"設定","status":"done","type":"mandatory"},"config.adb-input":{"name":"開発機からの投入","domain":"設定","status":"done","type":"optional"},"config.backup-off":{"name":"バックアップ無効","domain":"設定","status":"done","type":"mandatory"},"integrations.home-assistant":{"name":"Home Assistant","domain":"外部サービス連携","status":"planned","type":"optional"},"integrations.home-assistant.control":{"name":"機器の操作","domain":"外部サービス連携","status":"planned","type":"mandatory"},"integrations.home-assistant.state":{"name":"機器の状態取得","domain":"外部サービス連携","status":"planned","type":"mandatory"},"integrations.music":{"name":"音楽（Spotify）","domain":"外部サービス連携","status":"planned","type":"optional"},"integrations.photos":{"name":"写真（Immich）","domain":"外部サービス連携","status":"planned","type":"optional"}};
+const FEATURE_MODEL = {"project":"Hachi","updatedAt":"2026-09-17","domains":[{"id":"voice","name":"音声会話","features":[{"id":"voice.conversation","name":"会話セッション","type":"mandatory","status":"done","description":"Gemini Live API と 1 回の音声会話を張り、終わったら閉じる。","children":[{"id":"voice.conversation.start","name":"会話の始めかた","type":"mandatory","status":"in-progress","description":"どうやって会話を開始するか。","variationPoint":"会話の始めかた","children":[{"id":"voice.conversation.start.button","name":"トークボタン","type":"or","status":"done","description":"画面下のボタンを押して始める。マイク権限が未許可なら先に要求する。","children":[]},{"id":"voice.conversation.start.wake-word","name":"ウェイクワード常時待受","type":"or","status":"planned","description":"Phase 1。Julius の成果物を butler から流用し、検出を Foreground Service に置く。","children":[]}]},{"id":"voice.conversation.end","name":"会話の終わりかた","type":"mandatory","status":"done","description":"会話が閉じる契機。どれか 1 つでも起きればセッションは終わる。","variationPoint":"会話の終わりかた","children":[{"id":"voice.conversation.end.silence","name":"無音タイムアウト","type":"or","status":"done","description":"どちらも喋らないまま silenceTimeout 秒が過ぎたら閉じる（既定 30 秒、5〜600 秒）。","children":[]},{"id":"voice.conversation.end.manual","name":"終了ボタン","type":"or","status":"done","description":"会話オーバーレイの終了ボタンで即座に閉じる。","children":[]},{"id":"voice.conversation.end.cap","name":"日次上限到達","type":"or","status":"done","description":"会話中に今日の上限額を超えたら、その場で閉じる。","children":[]}]},{"id":"voice.conversation.caption","name":"字幕","type":"mandatory","status":"done","description":"入出力双方の文字起こしを setup で有効にし、会話オーバーレイに流す。","children":[]}]},{"id":"voice.half-duplex","name":"ハーフデュプレックス","type":"mandatory","status":"done","description":"端末にエコーキャンセラがないため、モデルが自分の声を拾わないようにする仕組み。","variationPoint":"エコー対策","children":[{"id":"voice.half-duplex.gate","name":"送信ゲート","type":"alternative","status":"done","description":"スピーカーが鳴っている間はマイクの音を一切送らない。鳴り終わりの実時刻を自前で持ち、余白 600 ms。","children":[]},{"id":"voice.half-duplex.aec","name":"ソフトウェア AEC","type":"alternative","status":"planned","description":"WebRTC AudioProcessing を積む上位互換。喋りかぶせが本当に必要と分かるまで入れない。","children":[]}]},{"id":"voice.hush","name":"返答を捨てる","type":"mandatory","status":"done","description":"送信ゲートで喋りかぶせができない代償として、画面タップで再生中の返答だけを落とす。","children":[]},{"id":"voice.model","name":"Live モデルの選択","type":"mandatory","status":"done","description":"会話に使う Gemini モデル。","children":[{"id":"voice.model.catalog","name":"ListModels から取得","type":"mandatory","status":"done","description":"bidiGenerateContent を名乗るモデルだけに絞る。新しい Live モデルがアプリ更新なしで出る。","children":[]},{"id":"voice.model.fallback","name":"内蔵の既定一覧","type":"mandatory","status":"done","description":"取得前・オフライン・失敗時に使う手書きの一覧。","children":[]}]},{"id":"voice.voice-choice","name":"プリセット音声","type":"mandatory","status":"done","description":"Aoede ほか、Google が文書化しているプリセット音声から 1 つ。一覧する API がないので手で持つ。","children":[]},{"id":"voice.tools","name":"道具（function calling）","type":"mandatory","status":"in-progress","description":"モデルに公開する道具。1 道具 1 ファイルで、宣言と実行を同じ場所に置く。","variationPoint":"公開する道具","children":[{"id":"voice.tools.time","name":"いまの時刻","type":"or","status":"done","description":"端末のロケールとタイムゾーンで現在時刻を返す。外部 I/O なし。","children":[]},{"id":"voice.tools.weather","name":"天気","type":"or","status":"done","description":"設定した場所の現在・今日・明日、および日本なら 1 時間先までの雨を返す。","children":[]},{"id":"voice.tools.home-assistant","name":"Home Assistant 操作・状態取得","type":"or","status":"planned","description":"Phase 3。機器の操作、機器の状態、機器一覧。","children":[]},{"id":"voice.tools.music","name":"音楽操作","type":"or","status":"planned","description":"Phase 3。Spotify を Home Assistant の media_player 越しに操る。","children":[]}]},{"id":"voice.service","name":"Foreground Service 化","type":"optional","status":"planned","description":"Phase 1。会話と検出を Service に移し、Activity は表示だけにする。マニフェストの権限は先に取ってある。","children":[]}]},{"id":"weather","name":"天気","features":[{"id":"weather.place","name":"場所の設定","type":"mandatory","status":"done","description":"Open-Meteo のジオコーディングで名前を引き、緯度経度とともに保存する。選ぶまでは天気が出ない。","children":[]},{"id":"weather.forecast","name":"予報","type":"mandatory","status":"done","description":"Open-Meteo。現在の気温・天気コード・昼夜と、3 日分の最高／最低／天気コード／降水確率。鍵不要・全世界。","children":[]},{"id":"weather.rain-nowcast","name":"1 時間先までの雨","type":"optional","status":"done","description":"Yahoo! Japan の YOLP。10 分刻みの実測と予測の雨量。日本限定で application id が要るので、未設定ならこの半分だけ落ちる。","children":[{"id":"weather.rain-nowcast.summary","name":"要約","type":"mandatory","status":"done","description":"いま降っているか／いつ降り出すか／いつ止むか／止んだあと戻るか／ピーク強度。","children":[]},{"id":"weather.rain-nowcast.timeline","name":"タイムライン表示","type":"mandatory","status":"done","description":"10 分刻みの雨量を帯として描く。","children":[]}]},{"id":"weather.refresh","name":"定期更新","type":"mandatory","status":"done","description":"アプリ全体で 1 部の天気を持ち、15 分ごとに取り直す。画面が伏せられている間は止める。","children":[]}]},{"id":"display","name":"画面","features":[{"id":"display.pager","name":"ホームのページャ","type":"mandatory","status":"in-progress","description":"横スワイプで切り替わるホーム画面。現在 3 ページ、Phase 4〜5 で増やす。","variationPoint":"ホームのページ","children":[{"id":"display.pager.clock","name":"時計","type":"or","status":"done","description":"既定のページ。空を背にした時計。","children":[]},{"id":"display.pager.weather","name":"天気","type":"or","status":"done","description":"現在・今日・明日と、あれば雨のタイムライン。","children":[]},{"id":"display.pager.radar","name":"雨雲レーダー","type":"or","status":"done","description":"地図に雨雲を重ねたページ。","children":[]},{"id":"display.pager.home","name":"スマートホーム","type":"or","status":"planned","description":"Phase 4。","children":[]},{"id":"display.pager.music","name":"音楽","type":"or","status":"planned","description":"Phase 4。","children":[]},{"id":"display.pager.photo","name":"フォトフレーム","type":"or","status":"planned","description":"Phase 5。","children":[]}]},{"id":"display.sky","name":"背景の空","type":"mandatory","status":"done","description":"全ページの背後に敷く 3 段グラデーション。","children":[{"id":"display.sky.time-of-day","name":"時刻でのグラデーション","type":"mandatory","status":"done","description":"キーフレームをチャンネルごとに補間し、夜明けと日暮れを跨いで滑らかに移る。1 日は巡るので末尾は真夜中へ戻る。","children":[]},{"id":"display.sky.weather-wash","name":"天気での退色","type":"mandatory","status":"done","description":"WMO コードを 7 つの情景に畳み、彩度と明度を落として時刻の色に重ねる。曇りの昼は曇りの夕方より明るいままになる。","children":[]}]},{"id":"display.radar-map","name":"レーダーの地図","type":"mandatory","status":"done","description":"地理院の淡色タイルに気象庁ナウキャストのタイルを重ねる。タイルは端末密度に合わせず原寸で描く。","children":[{"id":"display.radar-map.zoom","name":"縮尺の切替","type":"mandatory","status":"done","description":"タップで巡回し、選んだ縮尺を覚える。","children":[]},{"id":"display.radar-map.scale","name":"画面幅の実距離表示","type":"mandatory","status":"done","description":"いま何 km 幅を見ているかを出典表示の横に出す。縮尺が推測にならないように。","children":[]},{"id":"display.radar-map.animation","name":"コマ送り","type":"optional","status":"planned","description":"ナウキャストは過去と 1 時間先も 5 分刻みで出しており動かせるが、20 コマ分のタイルを抱えることになるので、要ると分かるまで待つ。","children":[]}]},{"id":"display.always-on","name":"壁掛け表示","type":"mandatory","status":"done","description":"画面を消さない、全画面でシステム UI を隠す、横固定、HOME の候補として名乗る（既定ランチャーは自動で変えない）。","children":[]}]},{"id":"spend","name":"料金","features":[{"id":"spend.metering","name":"積算","type":"mandatory","status":"done","description":"セッション中に届く usageMetadata から自前で計上する。Cloud Billing は数時間遅れるので見ない。","children":[{"id":"spend.metering.modality","name":"モダリティ別の単価","type":"mandatory","status":"done","description":"TEXT / AUDIO / IMAGE / VIDEO それぞれの単価を掛け、ドル額だけを日次・月次に足す。月の途中でモデルを変えても合算が狂わない。","children":[]},{"id":"spend.metering.unknown-high","name":"不明分を高いほうに倒す","type":"mandatory","status":"done","description":"内訳に現れない分と thoughtsTokenCount も必ず計上し、未知のモデルは高いほうの単価で見る。過小計上のほうが害が大きいため。","children":[]}]},{"id":"spend.display","name":"使用額の表示","type":"mandatory","status":"done","description":"今日／今月のドル額。小さい数字が動いて見えるよう小数 3 桁。ホーム右上と設定画面の両方に出る。","children":[]},{"id":"spend.daily-cap","name":"日次上限","type":"optional","status":"done","description":"今日の使用額が上限に達したら会話を始めさせない。0 を入れると無制限。","children":[]}]},{"id":"config","name":"設定","features":[{"id":"config.screen","name":"設定画面","type":"mandatory","status":"done","description":"左に項目・右に中身のマスター／ディテール。「適用」はなく、触った時点で保存される。","children":[]},{"id":"config.secret-storage","name":"秘密情報の保管","type":"mandatory","status":"done","description":"Android Keystore の AES/GCM 鍵で暗号化し `\u003cIV>:\u003c暗号文>` で保存する。復号できないときは例外を投げず未設定に倒す。","children":[]},{"id":"config.adb-input","name":"開発機からの投入","type":"optional","status":"done","description":"5 インチの画面で打つには長すぎる値を adb のブロードキャストで入れる。debug ビルドのみ。知らない設定名は書かずに弾く。","children":[]},{"id":"config.backup-off","name":"バックアップ無効","type":"mandatory","status":"done","description":"allowBackup=false。鍵を端末の外に出さない。","children":[]}]},{"id":"integrations","name":"外部サービス連携","features":[{"id":"integrations.home-assistant","name":"Home Assistant","type":"optional","status":"planned","description":"Phase 3。URL とアクセストークンの設定名だけ先に予約してある。","children":[{"id":"integrations.home-assistant.control","name":"機器の操作","type":"mandatory","status":"planned","description":"","children":[]},{"id":"integrations.home-assistant.state","name":"機器の状態取得","type":"mandatory","status":"planned","description":"","children":[]}]},{"id":"integrations.music","name":"音楽（Spotify）","type":"optional","status":"planned","description":"Phase 3。Home Assistant の media_player 越しに操る。直に Spotify を叩かない。","children":[]},{"id":"integrations.photos","name":"写真（Immich）","type":"optional","status":"planned","description":"Phase 5。Google フォトは photoslibrary.readonly の廃止と Picker API の制約で選択肢から外した。","children":[]}]}],"constraints":[{"type":"requires","from":"weather.rain-nowcast","fromName":"1 時間先までの雨","to":"weather.place","toName":"場所の設定"},{"type":"requires","from":"weather.forecast","fromName":"予報","to":"weather.place","toName":"場所の設定"},{"type":"requires","from":"display.pager.radar","fromName":"雨雲レーダー","to":"weather.place","toName":"場所の設定"},{"type":"requires","from":"display.sky.weather-wash","fromName":"天気での退色","to":"weather.forecast","toName":"予報"},{"type":"requires","from":"voice.tools.weather","fromName":"天気（道具）","to":"weather.forecast","toName":"予報"},{"type":"requires","from":"voice.conversation.end.cap","fromName":"日次上限到達","to":"spend.daily-cap","toName":"日次上限"},{"type":"requires","from":"voice.conversation.start.wake-word","fromName":"ウェイクワード常時待受","to":"voice.service","toName":"Foreground Service 化"},{"type":"requires","from":"voice.tools.home-assistant","fromName":"Home Assistant 操作・状態取得","to":"integrations.home-assistant","toName":"Home Assistant"},{"type":"requires","from":"voice.tools.music","fromName":"音楽操作","to":"integrations.music","toName":"音楽（Spotify）"},{"type":"requires","from":"integrations.music","fromName":"音楽（Spotify）","to":"integrations.home-assistant","toName":"Home Assistant"},{"type":"requires","from":"display.pager.home","fromName":"スマートホーム（ページ）","to":"integrations.home-assistant","toName":"Home Assistant"},{"type":"requires","from":"display.pager.music","fromName":"音楽（ページ）","to":"integrations.music","toName":"音楽（Spotify）"},{"type":"requires","from":"display.pager.photo","fromName":"フォトフレーム","to":"integrations.photos","toName":"写真（Immich）"},{"type":"requires","from":"config.secret-storage","fromName":"秘密情報の保管","to":"config.backup-off","toName":"バックアップ無効"},{"type":"excludes","from":"voice.half-duplex.gate","fromName":"送信ゲート","to":"voice.half-duplex.aec","toName":"ソフトウェア AEC"}]};
+</script>
+<script>
+/* system-model viewer — render.mjs が生成する HTML に埋め込まれるブラウザ側スクリプト。
+   グローバル DATA（system-model.json・無ければ null）、FEATURES（feature id -> メタ）、
+   FEATURE_MODEL（feature-model.json・無ければ null）を前提にする。
+   アーキテクチャ文書は DOM の #doc-source（Markdown）から読む。 */
+/* global DATA, FEATURES, FEATURE_MODEL, marked */
+(() => {
+  const M = DATA || {};
+  const F = FEATURES || {};
+  const FM = typeof FEATURE_MODEL !== 'undefined' && FEATURE_MODEL ? FEATURE_MODEL : null;
+  const NS = 'http://www.w3.org/2000/svg';
+  const arr = (v) => (Array.isArray(v) ? v : []);
+  const esc = (s) =>
+    String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const clip = (s, n) => (String(s ?? '').length > n ? `${String(s).slice(0, n)}…` : String(s ?? ''));
+
+  // ── 色 ───────────────────────────────────────────────────
+  const C = {
+    actorHuman: '#0e7490',
+    actorSystem: '#7c3aed',
+    system: '#0f172a',
+    external: '#b45309',
+    usecase: '#1d4ed8',
+    entity: '#0f766e',
+    feature: '#9333ea',
+    code: '#64748b',
+    ctx: '#334155',
+  };
+  const ENTITY_COLOR = {
+    'aggregate-root': '#0f766e',
+    entity: '#0284c7',
+    'value-object': '#64748b',
+    enum: '#a16207',
+  };
+  const ENTITY_MARK = { 'aggregate-root': 'AR', entity: 'E', 'value-object': 'VO', enum: 'EN' };
+  const STATUS_ICON = { planned: '⬜', 'in-progress': '🔄', done: '✅' };
+  const STATUS_LABEL = { planned: '未着手', 'in-progress': '実装中', done: '完了' };
+  const REL_MARK = { 'has-one': '1', 'has-many': '＊', references: '→', extends: '△', 'composed-of': '◆' };
+  const CRIT_LABEL = { high: '高', medium: '中', low: '低' };
+  const CTXREL_LABEL = {
+    'upstream-downstream': '上流 → 下流',
+    'shared-kernel': '共有カーネル',
+    conformist: '追従',
+    'anti-corruption-layer': '腐敗防止層',
+    partnership: '協調',
+  };
+  // フィーチャーモデル（feature-model.json）
+  const TYPE_COLOR = { mandatory: '#1d4ed8', optional: '#6b7280', alternative: '#c2410c', or: '#065f46' };
+  const TYPE_CHAR = { mandatory: 'M', optional: 'O', alternative: 'A', or: 'R' };
+  const TYPE_LABEL = { mandatory: 'Mandatory', optional: 'Optional', alternative: 'Alternative', or: 'Or' };
+  const CONSTRAINT_COLOR = { requires: '#2563eb', excludes: '#dc2626' };
+
+  // ── インデックス ─────────────────────────────────────────
+  const contexts = arr(M.domain && M.domain.contexts);
+  const entities = contexts.flatMap((c) => arr(c.entities).map((e) => ({ ...e, _context: c.id, _contextName: c.name })));
+  const usecases = arr(M.usecases);
+  const actors = arr(M.context && M.context.actors);
+  const externals = arr(M.context && M.context.externals);
+  const relations = contexts.flatMap((c) => arr(c.relations).map((r) => ({ ...r, _context: c.id })));
+  const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
+  const EN = byId(entities);
+  const AC = byId(actors);
+  const EX = byId(externals);
+  const UC = byId(usecases);
+  const CX = byId(contexts);
+
+  // フィーチャーモデルの索引（ドメイン付きで平坦化）
+  const fmDomains = FM ? arr(FM.domains) : [];
+  const features = [];
+  fmDomains.forEach((d) => {
+    const walk = (f, parent) => {
+      features.push({ ...f, _domain: d.id, _domainName: d.name, _parent: parent });
+      arr(f.children).forEach((c) => walk(c, f.id));
+    };
+    arr(d.features).forEach((f) => walk(f, null));
+  });
+  const FE = byId(features);
+  const fmConstraints = FM ? arr(FM.constraints) : [];
+  const featureUsecases = (id) => usecases.filter((u) => arr(u.features).includes(id));
+  const featureEntities = (id) => entities.filter((e) => arr(e.features).includes(id));
+
+  // ── 詳細パネル用 HTML ────────────────────────────────────
+  const chips = (label, items) =>
+    items && items.length
+      ? `<div class="mt-3"><div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">${label}</div>
+         <div class="flex flex-wrap gap-1">${items
+           .map((t) => `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px]">${esc(t)}</span>`)
+           .join('')}</div></div>`
+      : '';
+  const list = (label, items) =>
+    items && items.length
+      ? `<div class="mt-3"><div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">${label}</div>
+         <ul class="list-disc pl-4 space-y-0.5 text-[12px] text-slate-600">${items
+           .map((t) => `<li>${esc(t)}</li>`)
+           .join('')}</ul></div>`
+      : '';
+  const featureChips = (ids) =>
+    chips(
+      'フィーチャー',
+      arr(ids).map((id) => (F[id] ? `${F[id].name} (${id})` : id)),
+    );
+  const refChips = (refs) =>
+    chips(
+      'コード',
+      arr(refs).map((r) => (r.line ? `${r.path}:${r.line}` : r.path)),
+    );
+
+  function actorDetail(a) {
+    const used = usecases.filter((u) => u.actor === a.id);
+    return `${a.description ? `<p class="text-[13px] text-slate-600">${esc(a.description)}</p>` : ''}
+      ${list('ゴール', arr(a.goals))}
+      ${chips('ユースケース', used.map((u) => u.name))}`;
+  }
+  function externalDetail(x) {
+    const used = usecases.filter((u) => arr(u.externals).includes(x.id));
+    return `${x.description ? `<p class="text-[13px] text-slate-600">${esc(x.description)}</p>` : ''}
+      ${chips('属性', [x.kind, x.direction, x.protocol, x.criticality && `重要度: ${CRIT_LABEL[x.criticality] || x.criticality}`].filter(Boolean))}
+      ${chips('利用ユースケース', used.map((u) => u.name))}
+      ${refChips(x.refs)}`;
+  }
+  function entityDetail(e) {
+    const attrs = arr(e.attributes);
+    const attrHtml = attrs.length
+      ? `<div class="mt-3"><div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">属性</div>
+         <table class="w-full text-[12px]"><tbody>${attrs
+           .map(
+             (a) =>
+               `<tr class="border-b border-slate-100"><td class="py-0.5 pr-2 font-medium text-slate-700">${esc(a.name)}${a.required ? '<span class="text-rose-500">*</span>' : ''}</td><td class="py-0.5 text-slate-500 font-mono text-[11px]">${esc(a.type || '')}</td></tr>`,
+           )
+           .join('')}</tbody></table></div>`
+      : '';
+    const lc = e.lifecycle;
+    const lcHtml = lc
+      ? `<div class="mt-3"><div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">状態遷移（初期: ${esc(lc.initial || '-')}）</div>
+         <ul class="space-y-0.5 text-[12px] text-slate-600">${arr(lc.transitions)
+           .map(
+             (t) =>
+               `<li><span class="font-mono text-[11px]">${esc(t.from)}</span> → <span class="font-mono text-[11px]">${esc(t.to)}</span>${t.trigger ? ` <span class="text-slate-400">(${esc(t.trigger)})</span>` : ''}</li>`,
+           )
+           .join('')}</ul></div>`
+      : '';
+    const rw = usecases.filter((u) => arr(u.reads).includes(e.id) || arr(u.writes).includes(e.id));
+    return `${e.description ? `<p class="text-[13px] text-slate-600">${esc(e.description)}</p>` : ''}
+      ${chips('区分', [e.kind, e._contextName].filter(Boolean))}
+      ${attrHtml}${list('不変条件', arr(e.invariants))}${lcHtml}
+      ${chips('触れるユースケース', rw.map((u) => u.name))}
+      ${featureChips(e.features)}${refChips(e.refs)}`;
+  }
+  /** エンティティ関連のうちコンテキストをまたぐものを、コンテキストの組に集約する */
+  function crossContextPairs() {
+    const out = new Map();
+    relations.forEach((r) => {
+      const a = EN[r.from] && EN[r.from]._context;
+      const b = EN[r.to] && EN[r.to]._context;
+      if (!a || !b || a === b) return;
+      const key = `${a}|${b}`;
+      if (!out.has(key)) out.set(key, { from: a, to: b, via: [] });
+      out.get(key).via.push(`${EN[r.from].name} → ${EN[r.to].name}`);
+    });
+    return [...out.values()];
+  }
+
+  const contextEntities = (ctx) => arr(ctx.entities);
+  const contextUsecases = (ctx) => usecases.filter((u) => u.context === ctx.id);
+  const contextFeatures = (ctx) => [
+    ...new Set([...contextEntities(ctx), ...contextUsecases(ctx)].flatMap((n) => arr(n.features))),
+  ];
+  const contextDomains = (ctx) => [...new Set(contextFeatures(ctx).map((f) => F[f] && F[f].domain).filter(Boolean))];
+
+  function contextDetail(ctx) {
+    const ents = contextEntities(ctx);
+    const ucs = contextUsecases(ctx);
+    const declared = arr(M.domain && M.domain.contextRelations).filter((r) => r.from === ctx.id || r.to === ctx.id);
+    const declaredKeys = new Set(declared.flatMap((r) => [`${r.from}|${r.to}`, `${r.to}|${r.from}`]));
+    const implicit = crossContextPairs().filter(
+      (p) => (p.from === ctx.id || p.to === ctx.id) && !declaredKeys.has(`${p.from}|${p.to}`),
+    );
+    const relHtml = declared.length
+      ? list(
+          'コンテキスト関係',
+          declared.map((r) => {
+            const other = r.from === ctx.id ? CX[r.to] : CX[r.from];
+            const dir = r.from === ctx.id ? '→' : '←';
+            return `${dir} ${other ? other.name : r.from === ctx.id ? r.to : r.from}（${CTXREL_LABEL[r.kind] || r.kind || '関係'}）${r.description ? ` — ${r.description}` : ''}`;
+          }),
+        )
+      : '';
+    const implicitHtml = implicit.length
+      ? list(
+          '暗黙の依存（エンティティ関連から）',
+          implicit.map((p) => {
+            const other = p.from === ctx.id ? CX[p.to] : CX[p.from];
+            return `${p.from === ctx.id ? '→' : '←'} ${other ? other.name : p.from === ctx.id ? p.to : p.from}: ${p.via.join(' / ')}`;
+          }),
+        )
+      : '';
+    return `${ctx.description ? `<p class="text-[13px] text-slate-600">${esc(ctx.description)}</p>` : ''}
+      ${chips('規模', [`エンティティ ${ents.length}`, `集約ルート ${ents.filter((e) => e.kind === 'aggregate-root').length}`, `ユースケース ${ucs.length}`])}
+      ${chips('フィーチャー領域', contextDomains(ctx))}
+      ${list('エンティティ', ents.map((e) => `${e.name}${e.kind ? `（${e.kind}）` : ''}`))}
+      ${chips('ユースケース', ucs.map((u) => u.name))}
+      ${relHtml}${implicitHtml}`;
+  }
+
+  function usecaseDetail(u) {
+    const eps = arr(u.entrypoints).map((ep) => `${ep.kind || ''} ${ep.value || ''}`.trim());
+    return `${u.description ? `<p class="text-[13px] text-slate-600">${esc(u.description)}</p>` : ''}
+      ${chips('属性', [AC[u.actor] ? `アクター: ${AC[u.actor].name}` : null, CX[u.context] ? `コンテキスト: ${CX[u.context].name}` : null, u.status ? `状態: ${STATUS_LABEL[u.status] || u.status}` : null].filter(Boolean))}
+      ${u.trigger ? `<div class="mt-3"><div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">トリガー</div><p class="text-[12px] text-slate-600">${esc(u.trigger)}</p></div>` : ''}
+      ${chips('入口', eps)}
+      ${list('主シナリオ', arr(u.mainFlow))}
+      ${u.outcome ? `<div class="mt-3"><div class="text-[11px] uppercase tracking-wide text-slate-400 mb-1">結果</div><p class="text-[12px] text-slate-600">${esc(u.outcome)}</p></div>` : ''}
+      ${chips('読む', arr(u.reads).map((id) => (EN[id] ? EN[id].name : id)))}
+      ${chips('書く', arr(u.writes).map((id) => (EN[id] ? EN[id].name : id)))}
+      ${chips('外部', arr(u.externals).map((id) => (EX[id] ? EX[id].name : id)))}
+      ${featureChips(u.features)}${refChips(u.refs)}`;
+  }
+
+  function featureDetail(f) {
+    const cons = fmConstraints.filter((c) => c.from === f.id || c.to === f.id);
+    const us = featureUsecases(f.id);
+    const es = featureEntities(f.id);
+    const traceHtml = M.usecases
+      ? `${chips('ユースケース', us.map((u) => u.name))}${chips('エンティティ', es.map((e) => e.name))}${
+          !us.length && !es.length ? '<p class="mt-3 text-[11px] text-amber-700">system-model のどのノードからも参照されていない</p>' : ''
+        }`
+      : '';
+    return `<p class="text-[12px] font-mono text-slate-500">${esc(f.id)}</p>
+      ${f.description ? `<p class="mt-2 text-[13px] text-slate-600">${esc(f.description)}</p>` : ''}
+      ${chips('属性', [`${TYPE_LABEL[f.type] || f.type}`, `状態: ${STATUS_LABEL[f.status] || f.status || '-'}`, f._domainName ? `ドメイン: ${f._domainName}` : null, f.variationPoint ? `可変点: ${f.variationPoint}` : null].filter(Boolean))}
+      ${chips('子フィーチャー', arr(f.children).map((c) => `${c.name} (${TYPE_CHAR[c.type] || '?'})`))}
+      ${list(
+        '制約',
+        cons.map((c) => {
+          const other = c.from === f.id ? c.to : c.from;
+          const name = FE[other] ? FE[other].name : c.from === f.id ? c.toName : c.fromName;
+          return `${c.from === f.id ? '→' : '←'} ${c.type} ${name || other}`;
+        }),
+      )}
+      ${traceHtml}`;
+  }
+  function domainDetail(d) {
+    const fs = features.filter((f) => f._domain === d.id);
+    const ctxs = contexts.filter((c) => contextDomains(c).includes(d.name));
+    return `${chips('規模', [`フィーチャー ${fs.length}`, `完了 ${fs.filter((f) => f.status === 'done').length}`])}
+      ${chips('直下のフィーチャー', arr(d.features).map((f) => f.name))}
+      ${M.domain ? chips('関係するコンテキスト', ctxs.map((c) => c.name)) : ''}`;
+  }
+
+  // ── ビュー定義（列レイアウト） ───────────────────────────
+  const node = (id, label, sub, color, badge, detail) => ({ id, label, sub, color, badge, detail });
+
+  function viewContext() {
+    const sys = (M.context && M.context.system) || { name: M.project };
+    const columns = [
+      {
+        title: `アクター (${actors.length})`,
+        nodes: actors.map((a) =>
+          node(
+            `actor:${a.id}`,
+            a.name,
+            a.kind === 'system' ? 'システム' : '人',
+            a.kind === 'system' ? C.actorSystem : C.actorHuman,
+            String(usecases.filter((u) => u.actor === a.id).length),
+            () => actorDetail(a),
+          ),
+        ),
+      },
+      {
+        title: 'システム',
+        nodes: [node('system', sys.name || M.project, clip(sys.description, 34), C.system, null, () => `<p class="text-[13px] text-slate-600">${esc(sys.description || '')}</p>${chips('規模', [`ユースケース ${usecases.length}`, `エンティティ ${entities.length}`, `コンテキスト ${contexts.length}`])}`)],
+      },
+      {
+        title: `外部システム (${externals.length})`,
+        nodes: externals.map((x) =>
+          node(
+            `ext:${x.id}`,
+            x.name,
+            [x.kind, x.protocol].filter(Boolean).join(' / '),
+            C.external,
+            x.criticality === 'high' ? '!' : null,
+            () => externalDetail(x),
+          ),
+        ),
+      },
+    ];
+    const edges = [];
+    actors.forEach((a) => {
+      const n = usecases.filter((u) => u.actor === a.id).length;
+      edges.push({ from: `actor:${a.id}`, to: 'system', stroke: C.actorHuman, label: n ? `${n} UC` : '' });
+    });
+    externals.forEach((x) => {
+      const inbound = x.direction === 'inbound';
+      edges.push({
+        from: inbound ? `ext:${x.id}` : 'system',
+        to: inbound ? 'system' : `ext:${x.id}`,
+        stroke: C.external,
+        dash: x.direction === 'bidirectional' ? '6 3' : null,
+        label: usecases.filter((u) => arr(u.externals).includes(x.id)).length || '',
+      });
+    });
+    return { columns, edges, legend: [['人アクター', C.actorHuman], ['システムアクター', C.actorSystem], ['自システム', C.system], ['外部システム', C.external]] };
+  }
+
+  function viewUsecase() {
+    const columns = [
+      { title: `アクター (${actors.length})`, nodes: actors.map((a) => node(`actor:${a.id}`, a.name, a.kind === 'system' ? 'システム' : '人', a.kind === 'system' ? C.actorSystem : C.actorHuman, null, () => actorDetail(a))) },
+      {
+        title: `ユースケース (${usecases.length})`,
+        nodes: usecases.map((u) =>
+          node(
+            `uc:${u.id}`,
+            u.name,
+            clip(arr(u.entrypoints).map((e) => e.value).join(' / ') || u.trigger, 34),
+            C.usecase,
+            STATUS_ICON[u.status] || null,
+            () => usecaseDetail(u),
+          ),
+        ),
+      },
+      {
+        title: `エンティティ (${entities.length})`,
+        nodes: entities.map((e) =>
+          node(`ent:${e.id}`, e.name, `${e._contextName || ''}${e.lifecycle ? ' ⟳' : ''}`, ENTITY_COLOR[e.kind] || C.entity, ENTITY_MARK[e.kind] || null, () => entityDetail(e)),
+        ),
+      },
+      { title: `外部 (${externals.length})`, nodes: externals.map((x) => node(`ext:${x.id}`, x.name, x.kind, C.external, null, () => externalDetail(x))) },
+    ];
+    const edges = [];
+    usecases.forEach((u) => {
+      if (u.actor) edges.push({ from: `actor:${u.actor}`, to: `uc:${u.id}`, stroke: C.actorHuman });
+      arr(u.reads).forEach((id) => edges.push({ from: `uc:${u.id}`, to: `ent:${id}`, stroke: '#94a3b8', dash: '5 3', label: 'R' }));
+      arr(u.writes).forEach((id) => edges.push({ from: `uc:${u.id}`, to: `ent:${id}`, stroke: C.entity, label: 'W' }));
+      arr(u.externals).forEach((id) => edges.push({ from: `uc:${u.id}`, to: `ext:${id}`, stroke: C.external, dash: '2 3' }));
+    });
+    return { columns, edges, legend: [['アクター起動', C.actorHuman], ['書き込み (W)', C.entity], ['読み取り (R)', '#94a3b8'], ['外部呼び出し', C.external]] };
+  }
+
+  function viewTrace() {
+    const featureIds = [...new Set([...usecases, ...entities].flatMap((n) => arr(n.features)))].sort();
+    const codeRefs = new Map();
+    const addRef = (r, ownerId) => {
+      if (!r || !r.path) return;
+      if (!codeRefs.has(r.path)) codeRefs.set(r.path, new Set());
+      codeRefs.get(r.path).add(ownerId);
+    };
+    usecases.forEach((u) => arr(u.refs).forEach((r) => addRef(r, `uc:${u.id}`)));
+    entities.forEach((e) => arr(e.refs).forEach((r) => addRef(r, `ent:${e.id}`)));
+    externals.forEach((x) => arr(x.refs).forEach((r) => addRef(r, `ext:${x.id}`)));
+
+    const columns = [
+      {
+        title: `フィーチャー (${featureIds.length})`,
+        nodes: featureIds.map((id) =>
+          node(`feat:${id}`, F[id] ? F[id].name : id, F[id] ? `${F[id].domain || ''} / ${id}` : `${id}（feature-model 未定義）`, C.feature, F[id] ? null : '?', () => {
+            const us = usecases.filter((u) => arr(u.features).includes(id));
+            const es = entities.filter((e) => arr(e.features).includes(id));
+            return `<p class="text-[13px] text-slate-600 font-mono">${esc(id)}</p>${chips('ユースケース', us.map((u) => u.name))}${chips('エンティティ', es.map((e) => e.name))}`;
+          }),
+        ),
+      },
+      {
+        title: `ユースケース (${usecases.length})`,
+        nodes: usecases.map((u) => node(`uc:${u.id}`, u.name, arr(u.features).length ? '' : 'フィーチャー未紐付け', C.usecase, STATUS_ICON[u.status] || null, () => usecaseDetail(u))),
+      },
+      {
+        title: `エンティティ (${entities.length})`,
+        nodes: entities.map((e) => node(`ent:${e.id}`, e.name, e._contextName, ENTITY_COLOR[e.kind] || C.entity, ENTITY_MARK[e.kind] || null, () => entityDetail(e))),
+      },
+      {
+        title: `コード (${codeRefs.size})`,
+        nodes: [...codeRefs.keys()].map((p) =>
+          node(`code:${p}`, p.split('/').pop(), clip(p, 36), C.code, null, () => `<p class="text-[12px] font-mono text-slate-600 break-all">${esc(p)}</p>${chips('参照元', [...codeRefs.get(p)].map((id) => id.replace(/^(uc|ent|ext):/, '')))}`),
+        ),
+      },
+    ];
+    const edges = [];
+    usecases.forEach((u) => {
+      arr(u.features).forEach((f) => edges.push({ from: `feat:${f}`, to: `uc:${u.id}`, stroke: C.feature }));
+      [...arr(u.reads), ...arr(u.writes)].forEach((id) => edges.push({ from: `uc:${u.id}`, to: `ent:${id}`, stroke: '#cbd5e1' }));
+      arr(u.refs).forEach((r) => r.path && edges.push({ from: `uc:${u.id}`, to: `code:${r.path}`, stroke: C.code, dash: '3 3' }));
+    });
+    entities.forEach((e) => {
+      arr(e.features).forEach((f) => edges.push({ from: `feat:${f}`, to: `ent:${e.id}`, stroke: C.feature, dash: '5 3' }));
+      arr(e.refs).forEach((r) => r.path && edges.push({ from: `ent:${e.id}`, to: `code:${r.path}`, stroke: C.code, dash: '3 3' }));
+    });
+    return { columns, edges, legend: [['フィーチャー', C.feature], ['ユースケース', C.usecase], ['エンティティ', C.entity], ['コード', C.code]] };
+  }
+
+  // ── レイアウト（列） ─────────────────────────────────────
+  const NW = 234;
+  const NH = 62;
+  const GAPY = 14;
+  const GAPX = 176;
+  const TOPY = 44;
+
+  function layoutColumns(view) {
+    const pos = {};
+    const heights = view.columns.map((c) => Math.max(0, c.nodes.length * (NH + GAPY) - GAPY));
+    const maxH = Math.max(...heights, 0);
+    view.columns.forEach((col, ci) => {
+      const x = ci * (NW + GAPX);
+      const startY = TOPY + (maxH - heights[ci]) / 2;
+      col._x = x;
+      col.nodes.forEach((n, i) => {
+        pos[n.id] = { x, y: startY + i * (NH + GAPY), w: NW, h: NH, node: n };
+      });
+    });
+    return { pos, width: Math.max(NW, view.columns.length * (NW + GAPX) - GAPX), height: TOPY + maxH + 40 };
+  }
+
+  // ── レイアウト（ドメイン図） ─────────────────────────────
+  const CW = 214;
+  const CH = 82;
+  const CGAP = 16;
+  const GPADX = 20;
+  const GPADTOP = 58;
+  const GGAP = 60;
+  const MAXROW = 2100;
+
+  function layoutDomain() {
+    const pos = {};
+    const groups = [];
+    let rowX = 0;
+    let rowY = 0;
+    let rowH = 0;
+    let width = 0;
+    contexts.forEach((c) => {
+      const ents = arr(c.entities);
+      const cols = Math.min(2, Math.max(1, ents.length));
+      const rows = Math.ceil(Math.max(ents.length, 1) / cols);
+      const w = GPADX * 2 + cols * CW + (cols - 1) * CGAP;
+      const h = GPADTOP + GPADX + rows * CH + (rows - 1) * CGAP;
+      if (rowX > 0 && rowX + w > MAXROW) {
+        rowY += rowH + GGAP;
+        rowX = 0;
+        rowH = 0;
+      }
+      const gx = rowX;
+      const gy = rowY;
+      groups.push({ ctx: c, x: gx, y: gy, w, h });
+      pos[`ctx:${c.id}`] = { x: gx, y: gy, w, h, group: true };
+      ents.forEach((e, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        pos[`ent:${e.id}`] = {
+          x: gx + GPADX + col * (CW + CGAP),
+          y: gy + GPADTOP + row * (CH + CGAP),
+          w: CW,
+          h: CH,
+          node: node(`ent:${e.id}`, e.name, '', ENTITY_COLOR[e.kind] || C.entity, ENTITY_MARK[e.kind] || null, () => entityDetail(e)),
+          entity: e,
+        };
+      });
+      rowX += w + GGAP;
+      rowH = Math.max(rowH, h);
+      width = Math.max(width, rowX - GGAP);
+    });
+    const edges = relations.map((r) => ({
+      from: `ent:${r.from}`,
+      to: `ent:${r.to}`,
+      stroke: r._context && EN[r.to] && EN[r.to]._context !== r._context ? '#c2410c' : '#0f766e',
+      label: `${REL_MARK[r.kind] || ''}${r.name ? ` ${r.name}` : ''}`,
+      free: true,
+    }));
+    arr(M.domain && M.domain.contextRelations).forEach((r) => {
+      edges.push({ from: `ctx:${r.from}`, to: `ctx:${r.to}`, stroke: '#64748b', dash: '8 4', label: CTXREL_LABEL[r.kind] || r.kind || '', free: true });
+    });
+    return { pos, edges, width: width + 20, height: rowY + rowH + 40, groups };
+  }
+
+  // ── レイアウト（フィーチャーツリー） ─────────────────────
+  // プロジェクトを頂点に ドメイン → フィーチャー → 子フィーチャー をトップダウンに並べる（Reingold-Tilford 風）
+  const FW = 210;
+  const FH = 80;
+  const DW = 200;
+  const DH = 48;
+  const RW = 240;
+  const RH = 52;
+  const HGAP = 48;
+  const VGAP = 60;
+
+  function layoutFeature() {
+    const root = {
+      _kind: 'root',
+      id: '__root__',
+      name: (FM && FM.project) || M.project || '',
+      _w: RW,
+      _h: RH,
+      children: fmDomains.map((d) => ({
+        _kind: 'domain',
+        id: `dom:${d.id}`,
+        name: d.name,
+        _w: DW,
+        _h: DH,
+        _domain: d,
+        children: arr(d.features).map((f) => attach(f)),
+      })),
+    };
+    function attach(f) {
+      return { ...f, _kind: 'feature', id: `feat:${f.id}`, _feature: FE[f.id] || f, _w: FW, _h: FH, children: arr(f.children).map(attach) };
+    }
+    const subtreeWidth = (n) => {
+      if (!n.children.length) return n._w;
+      return Math.max(n._w, n.children.reduce((s, c, i) => s + subtreeWidth(c) + (i > 0 ? HGAP : 0), 0));
+    };
+    const pos = {};
+    const edges = [];
+    let maxY = 0;
+    const place = (n, x, y) => {
+      const sw = subtreeWidth(n);
+      const nx = x + (sw - n._w) / 2;
+      pos[n.id] = { x: nx, y, w: n._w, h: n._h, tree: n };
+      maxY = Math.max(maxY, y + n._h);
+      let cx = x;
+      n.children.forEach((c) => {
+        place(c, cx, y + n._h + VGAP);
+        const color = c._kind === 'feature' ? TYPE_COLOR[c.type] || '#94a3b8' : '#94a3b8';
+        edges.push({ from: n.id, to: c.id, stroke: color, dash: c._kind === 'feature' && c.type === 'optional' ? '5 3' : null, vertical: true });
+        cx += subtreeWidth(c) + HGAP;
+      });
+    };
+    place(root, 0, 0);
+    fmConstraints.forEach((c) => {
+      if (!pos[`feat:${c.from}`] || !pos[`feat:${c.to}`]) return;
+      edges.push({ from: `feat:${c.from}`, to: `feat:${c.to}`, stroke: CONSTRAINT_COLOR[c.type] || '#94a3b8', dash: '6 3', label: c.type, free: true });
+    });
+    return { pos, edges, width: subtreeWidth(root), height: maxY + 20 };
+  }
+
+  // ── SVG 描画 ─────────────────────────────────────────────
+  const svg = document.getElementById('canvas');
+  const world = document.getElementById('world');
+  const tip = document.getElementById('tooltip');
+  const panel = document.getElementById('panel');
+  const panelBody = document.getElementById('panel-body');
+  const panelTitle = document.getElementById('panel-title');
+
+  function el(tag, attrs, text) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) if (attrs[k] != null) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function edgePath(a, b, free, vertical) {
+    if (vertical) {
+      const sx = a.x + a.w / 2;
+      const sy = a.y + a.h;
+      const ex = b.x + b.w / 2;
+      const ey = b.y;
+      const my = (sy + ey) / 2;
+      return { d: `M ${sx} ${sy} C ${sx} ${my}, ${ex} ${my}, ${ex} ${ey}`, mx: (sx + ex) / 2, my };
+    }
+    if (!free) {
+      const sx = a.x + a.w;
+      const sy = a.y + a.h / 2;
+      const ex = b.x;
+      const ey = b.y + b.h / 2;
+      const dx = Math.max(40, (ex - sx) / 2);
+      return { d: `M ${sx} ${sy} C ${sx + dx} ${sy}, ${ex - dx} ${ey}, ${ex} ${ey}`, mx: (sx + ex) / 2, my: (sy + ey) / 2 };
+    }
+    // 自由配置: 矩形中心を結び、縁で切る
+    const c1 = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
+    const c2 = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+    const p1 = borderPoint(a, c2);
+    const p2 = borderPoint(b, c1);
+    const dx = Math.abs(p2.x - p1.x) / 2.4;
+    return { d: `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${p2.x - dx} ${p2.y}, ${p2.x} ${p2.y}`, mx: (p1.x + p2.x) / 2, my: (p1.y + p2.y) / 2 };
+  }
+  function borderPoint(r, target) {
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    const dx = target.x - cx;
+    const dy = target.y - cy;
+    if (dx === 0 && dy === 0) return { x: cx, y: cy };
+    const sx = dx === 0 ? Infinity : r.w / 2 / Math.abs(dx);
+    const sy = dy === 0 ? Infinity : r.h / 2 / Math.abs(dy);
+    const s = Math.min(sx, sy);
+    return { x: cx + dx * s, y: cy + dy * s };
+  }
+
+  let layout = null;
+  let adjacency = new Map();
+  let pinned = null;
+
+  function drawNodeCard(p, id) {
+    const n = p.node;
+    const g = el('g', { transform: `translate(${p.x},${p.y})`, 'data-node': id, style: 'cursor:pointer' });
+    g.appendChild(el('rect', { width: p.w, height: p.h, rx: 12, fill: 'rgba(15,23,42,0.06)', transform: 'translate(2,3)' }));
+    g.appendChild(el('rect', { width: p.w, height: p.h, rx: 12, fill: '#fff', stroke: n.color, 'stroke-width': 1.5 }));
+    g.appendChild(el('rect', { x: 0, y: 10, width: 5, height: p.h - 20, rx: 2.5, fill: n.color }));
+    g.appendChild(el('text', { x: 16, y: 26, 'font-size': 13, 'font-weight': 600, fill: '#0f172a' }, clip(n.label, 22)));
+    if (n.sub) g.appendChild(el('text', { x: 16, y: 44, 'font-size': 10.5, fill: '#94a3b8' }, clip(n.sub, 30)));
+    if (n.badge) {
+      g.appendChild(el('rect', { x: p.w - 34, y: 10, width: 26, height: 18, rx: 9, fill: n.color, opacity: 0.12 }));
+      g.appendChild(el('text', { x: p.w - 21, y: 23, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: n.color }, clip(n.badge, 3)));
+    }
+    if (p.entity) {
+      const e = p.entity;
+      const meta = [
+        arr(e.attributes).length ? `属性 ${arr(e.attributes).length}` : null,
+        arr(e.invariants).length ? `不変 ${arr(e.invariants).length}` : null,
+        e.lifecycle ? `状態 ${arr(e.lifecycle.states).length}` : null,
+      ].filter(Boolean).join(' ・ ');
+      if (meta) g.appendChild(el('text', { x: 16, y: 62, 'font-size': 10, fill: '#64748b' }, meta));
+      if (arr(e.features).length) g.appendChild(el('text', { x: p.w - 10, y: 62, 'text-anchor': 'end', 'font-size': 9.5, fill: C.feature }, `F ${arr(e.features).length}`));
+    }
+    g.addEventListener('mouseenter', (ev) => {
+      if (!pinned) highlight(id);
+      showTip(ev, n);
+    });
+    g.addEventListener('mouseleave', () => {
+      if (!pinned) highlight(null);
+      tip.classList.add('hidden');
+    });
+    g.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      pinned = pinned === id ? null : id;
+      highlight(pinned);
+      if (pinned) openPanel(n);
+      else closePanel();
+    });
+    return g;
+  }
+
+  function drawGroup(p, ctx) {
+    const ents = contextEntities(ctx);
+    const ucs = contextUsecases(ctx);
+    const domains = contextDomains(ctx);
+    const g = el('g', { 'data-node': `ctx:${ctx.id}`, style: 'cursor:pointer' });
+    g.appendChild(el('rect', { x: p.x, y: p.y, width: p.w, height: p.h, rx: 16, fill: '#f8fafc', stroke: '#cbd5e1', 'stroke-width': 1.5, 'stroke-dasharray': '6 4' }));
+    g.appendChild(el('rect', { x: p.x + 14, y: p.y + 12, width: Math.min(p.w - 28, 12 + ctx.name.length * 13), height: 24, rx: 12, fill: C.ctx }));
+    g.appendChild(el('text', { x: p.x + 24, y: p.y + 28, 'font-size': 12, 'font-weight': 600, fill: '#fff' }, clip(ctx.name, 18)));
+    g.appendChild(
+      el(
+        'text',
+        { x: p.x + p.w - 14, y: p.y + 28, 'text-anchor': 'end', 'font-size': 10.5, fill: '#94a3b8' },
+        `エンティティ ${ents.length}　ユースケース ${ucs.length}`,
+      ),
+    );
+    if (domains.length) {
+      g.appendChild(
+        el('text', { x: p.x + 16, y: p.y + 46, 'font-size': 10, fill: C.feature }, clip(`フィーチャー領域: ${domains.join(' / ')}`, Math.floor(p.w / 6))),
+      );
+    }
+    const detail = () => contextDetail(ctx);
+    g.addEventListener('mouseenter', (ev) => {
+      if (!pinned) highlight(`ctx:${ctx.id}`);
+      showTip(ev, { label: ctx.name, sub: `エンティティ ${ents.length} / ユースケース ${ucs.length}` });
+    });
+    g.addEventListener('mouseleave', () => {
+      if (!pinned) highlight(null);
+      tip.classList.add('hidden');
+    });
+    g.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const id = `ctx:${ctx.id}`;
+      pinned = pinned === id ? null : id;
+      highlight(pinned);
+      if (pinned) openPanel({ label: ctx.name, detail });
+      else closePanel();
+    });
+    return g;
+  }
+
+  /** フィーチャーツリーのノード（ルート / ドメイン / フィーチャー） */
+  function drawTreeNode(p, id) {
+    const n = p.tree;
+    const g = el('g', { transform: `translate(${p.x},${p.y})`, 'data-node': id, style: 'cursor:pointer' });
+    let tipNode;
+    let detail;
+    if (n._kind === 'root') {
+      g.appendChild(el('rect', { width: p.w, height: p.h, rx: 14, fill: 'rgba(0,0,0,0.08)', transform: 'translate(2,3)' }));
+      g.appendChild(el('rect', { width: p.w, height: p.h, rx: 14, fill: C.system }));
+      g.appendChild(el('text', { x: p.w / 2, y: p.h / 2 + 5, 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 700, fill: '#fff' }, clip(n.name, 20)));
+      tipNode = { label: n.name, sub: `ドメイン ${fmDomains.length} / フィーチャー ${features.length}` };
+      detail = () => chips('規模', [`ドメイン ${fmDomains.length}`, `フィーチャー ${features.length}`, `完了 ${features.filter((f) => f.status === 'done').length}`]);
+    } else if (n._kind === 'domain') {
+      g.appendChild(el('rect', { width: p.w, height: p.h, rx: 10, fill: 'rgba(0,0,0,0.06)', transform: 'translate(2,3)' }));
+      g.appendChild(el('rect', { width: p.w, height: p.h, rx: 10, fill: C.ctx }));
+      g.appendChild(el('text', { x: p.w / 2, y: p.h / 2 + 5, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 600, fill: '#fff' }, clip(n.name, 18)));
+      tipNode = { label: n.name, sub: `フィーチャー ${features.filter((f) => f._domain === n._domain.id).length}` };
+      detail = () => domainDetail(n._domain);
+    } else {
+      const f = n._feature;
+      const color = TYPE_COLOR[f.type] || '#6b7280';
+      g.appendChild(el('rect', { width: p.w, height: p.h, rx: 12, fill: 'rgba(0,0,0,0.07)', transform: 'translate(2,3)' }));
+      g.appendChild(el('rect', { width: p.w, height: p.h, rx: 12, fill: '#fff', stroke: color, 'stroke-width': 1.5 }));
+      g.appendChild(el('rect', { x: 0, y: 10, width: 5, height: p.h - 20, rx: 2.5, fill: color }));
+      g.appendChild(el('circle', { cx: 30, cy: 28, r: 15, fill: color }));
+      g.appendChild(el('text', { x: 30, y: 33, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 700, fill: '#fff' }, TYPE_CHAR[f.type] || '?'));
+      g.appendChild(el('text', { x: 54, y: 24, 'font-size': 13, 'font-weight': 600, fill: '#1e293b' }, clip(f.name, 15)));
+      g.appendChild(el('text', { x: p.w - 10, y: 24, 'text-anchor': 'end', 'font-size': 14 }, STATUS_ICON[f.status] || '⬜'));
+      if (f.variationPoint) g.appendChild(el('text', { x: 54, y: 40, 'font-size': 10, fill: '#94a3b8' }, clip(`可変点: ${f.variationPoint}`, 22)));
+      if (f.description) g.appendChild(el('text', { x: 54, y: f.variationPoint ? 56 : 42, 'font-size': 10, fill: '#94a3b8' }, clip(f.description, 22)));
+      const linked = featureUsecases(f.id).length + featureEntities(f.id).length;
+      if (linked) g.appendChild(el('text', { x: p.w - 10, y: p.h - 10, 'text-anchor': 'end', 'font-size': 9.5, fill: C.usecase }, `UC/E ${linked}`));
+      tipNode = { label: f.name, sub: `${TYPE_LABEL[f.type] || f.type} / ${STATUS_LABEL[f.status] || f.status || '-'}` };
+      detail = () => featureDetail(f);
+    }
+    g.addEventListener('mouseenter', (ev) => {
+      if (!pinned) highlight(id);
+      showTip(ev, tipNode);
+    });
+    g.addEventListener('mouseleave', () => {
+      if (!pinned) highlight(null);
+      tip.classList.add('hidden');
+    });
+    g.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      pinned = pinned === id ? null : id;
+      highlight(pinned);
+      if (pinned) openPanel({ label: tipNode.label, detail });
+      else closePanel();
+    });
+    return g;
+  }
+
+  function buildAdjacency(edges) {
+    const map = new Map();
+    edges.forEach((e) => {
+      if (!map.has(e.from)) map.set(e.from, new Set());
+      if (!map.has(e.to)) map.set(e.to, new Set());
+      map.get(e.from).add(e.to);
+      map.get(e.to).add(e.from);
+    });
+    return map;
+  }
+
+  function highlight(id) {
+    const q = (document.getElementById('search').value || '').trim().toLowerCase();
+    const near = id ? new Set([id, ...(adjacency.get(id) || [])]) : null;
+    world.querySelectorAll('[data-node]').forEach((g) => {
+      const nid = g.getAttribute('data-node');
+      let op = 1;
+      if (near && !near.has(nid)) op = 0.12;
+      if (!near && q && !nid.toLowerCase().includes(q) && !(g.textContent || '').toLowerCase().includes(q)) op = 0.15;
+      g.setAttribute('opacity', op);
+    });
+    world.querySelectorAll('[data-edge]').forEach((p) => {
+      const [f, t] = p.getAttribute('data-edge').split('|');
+      let op = 0.75;
+      if (near) op = near.has(f) && near.has(t) ? 1 : 0.05;
+      else if (q) op = 0.25;
+      p.setAttribute('opacity', op);
+    });
+  }
+
+  function showTip(ev, n) {
+    tip.innerHTML = `<strong class="block mb-0.5">${esc(n.label)}</strong>${n.sub ? `<span class="opacity-70">${esc(n.sub)}</span>` : ''}<span class="block mt-1 opacity-50 text-[10px]">クリックで詳細</span>`;
+    tip.classList.remove('hidden');
+  }
+  function openPanel(n) {
+    panelTitle.textContent = n.label;
+    panelBody.innerHTML = typeof n.detail === 'function' ? n.detail() : n.detail || '';
+    panel.classList.remove('hidden');
+  }
+  function closePanel() {
+    panel.classList.add('hidden');
+  }
+
+  // ── 描画 ─────────────────────────────────────────────────
+  // タブは render.mjs がデータのある軸だけを出すので、最初のタブを初期ビューにする
+  const firstTab = document.querySelector('[data-view]');
+  let currentView = firstTab ? firstTab.getAttribute('data-view') : 'context';
+  const VIEWS = { context: viewContext, usecase: viewUsecase, trace: viewTrace };
+  const canvasContainer = document.getElementById('canvas-container');
+  const legendBox = document.getElementById('legend');
+  const docPane = document.getElementById('doc-pane');
+  let docRendered = false;
+
+  /** アーキテクチャ文書（Markdown）は SVG ではなく文書ペインに出す */
+  function showDoc(on) {
+    canvasContainer.classList.toggle('hidden', on);
+    legendBox.classList.toggle('hidden', on);
+    if (docPane) docPane.classList.toggle('hidden', !on);
+    if (on && !docRendered && docPane) {
+      const src = document.getElementById('doc-source');
+      const target = document.getElementById('doc');
+      if (src && target) {
+        target.innerHTML = typeof marked !== 'undefined' ? marked.parse(src.textContent.trim()) : `<pre class="whitespace-pre-wrap text-[12px]">${esc(src.textContent.trim())}</pre>`;
+      }
+      docRendered = true;
+    }
+  }
+
+  function render() {
+    world.textContent = '';
+    pinned = null;
+    closePanel();
+    if (currentView === 'arch') {
+      showDoc(true);
+      return;
+    }
+    showDoc(false);
+    let legend;
+    if (currentView === 'feature') {
+      const l = layoutFeature();
+      layout = l;
+      adjacency = buildAdjacency(l.edges);
+      drawEdges(l.edges, l.pos);
+      Object.entries(l.pos).forEach(([id, p]) => world.appendChild(drawTreeNode(p, id)));
+      legend = [
+        ...Object.keys(TYPE_COLOR).map((t) => [`${TYPE_CHAR[t]} ${TYPE_LABEL[t]}`, TYPE_COLOR[t]]),
+        ...(fmConstraints.length ? [['requires（破線）', CONSTRAINT_COLOR.requires], ['excludes（破線）', CONSTRAINT_COLOR.excludes]] : []),
+      ];
+    } else if (currentView === 'domain') {
+      const l = layoutDomain();
+      layout = l;
+      // コンテキストと所属エンティティも隣接とみなす（枠を hover したとき中身が残るように）
+      adjacency = buildAdjacency([
+        ...l.edges,
+        ...contexts.flatMap((c) => arr(c.entities).map((e) => ({ from: `ctx:${c.id}`, to: `ent:${e.id}` }))),
+      ]);
+      l.groups.forEach((g) => world.appendChild(drawGroup(g, g.ctx)));
+      drawEdges(l.edges, l.pos);
+      Object.entries(l.pos).forEach(([id, p]) => {
+        if (p.node) world.appendChild(drawNodeCard(p, id));
+      });
+      legend = [
+        ['集約ルート', ENTITY_COLOR['aggregate-root']],
+        ['エンティティ', ENTITY_COLOR.entity],
+        ['値オブジェクト', ENTITY_COLOR['value-object']],
+        ['enum', ENTITY_COLOR.enum],
+        ['コンテキストをまたぐ関連', '#c2410c'],
+        ['コンテキスト関係（破線）', '#64748b'],
+      ];
+    } else {
+      const view = VIEWS[currentView]();
+      const l = layoutColumns(view);
+      layout = l;
+      adjacency = buildAdjacency(view.edges);
+      view.columns.forEach((col) => {
+        world.appendChild(el('text', { x: col._x, y: 22, 'font-size': 12, 'font-weight': 700, fill: '#64748b' }, col.title));
+      });
+      drawEdges(view.edges, l.pos);
+      Object.entries(l.pos).forEach(([id, p]) => world.appendChild(drawNodeCard(p, id)));
+      legend = view.legend;
+    }
+    renderLegend(legend);
+    fit();
+    highlight(null);
+  }
+
+  function drawEdges(edges, pos) {
+    const g = el('g', { style: 'pointer-events:none' });
+    edges.forEach((e) => {
+      const a = pos[e.from];
+      const b = pos[e.to];
+      if (!a || !b) return;
+      const { d, mx, my } = edgePath(a, b, e.free, e.vertical);
+      const path = el('path', {
+        d,
+        fill: 'none',
+        stroke: e.stroke || '#94a3b8',
+        'stroke-width': 1.4,
+        'stroke-dasharray': e.dash || null,
+        'data-edge': `${e.from}|${e.to}`,
+        opacity: 0.75,
+        'marker-end': 'url(#arrow)',
+      });
+      g.appendChild(path);
+      if (e.label) {
+        const t = el('text', { x: mx, y: my - 4, 'text-anchor': 'middle', 'font-size': 9.5, fill: '#94a3b8', 'data-edge': `${e.from}|${e.to}` }, String(e.label));
+        g.appendChild(t);
+      }
+    });
+    world.appendChild(g);
+  }
+
+  function renderLegend(items) {
+    const box = document.getElementById('legend');
+    box.innerHTML = (items || [])
+      .map(
+        ([label, color]) =>
+          `<span class="inline-flex items-center gap-1.5 text-[11px] text-slate-500"><span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${color}"></span>${esc(label)}</span>`,
+      )
+      .join('');
+  }
+
+  // ── パン・ズーム ─────────────────────────────────────────
+  let zoom = 1;
+  let panX = 40;
+  let panY = 20;
+  let panning = false;
+  let lx = 0;
+  let ly = 0;
+  const MINZ = 0.15;
+  const MAXZ = 2.2;
+
+  function applyT() {
+    world.setAttribute('transform', `translate(${panX},${panY}) scale(${zoom})`);
+    document.getElementById('zoom-label').textContent = `${Math.round(zoom * 100)}%`;
+  }
+  function fit() {
+    const r = svg.getBoundingClientRect();
+    const z = Math.min((r.width - 80) / (layout.width || 1), (r.height - 80) / (layout.height || 1), 1.2);
+    zoom = Math.max(MINZ, Math.min(MAXZ, z));
+    panX = 40;
+    panY = 30;
+    applyT();
+  }
+  svg.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    panning = true;
+    lx = e.clientX;
+    ly = e.clientY;
+    svg.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!panning) return;
+    panX += e.clientX - lx;
+    panY += e.clientY - ly;
+    lx = e.clientX;
+    ly = e.clientY;
+    applyT();
+  });
+  window.addEventListener('mouseup', () => {
+    panning = false;
+    svg.style.cursor = 'grab';
+  });
+  svg.addEventListener('click', () => {
+    if (pinned) {
+      pinned = null;
+      highlight(null);
+      closePanel();
+    }
+  });
+  svg.addEventListener(
+    'wheel',
+    (e) => {
+      if (!e.shiftKey) return;
+      e.preventDefault();
+      const r = svg.getBoundingClientRect();
+      const cx = e.clientX - r.left;
+      const cy = e.clientY - r.top;
+      const f = e.deltaY > 0 ? 0.92 : 1.08;
+      const nz = Math.min(MAXZ, Math.max(MINZ, zoom * f));
+      if (nz === zoom) return;
+      panX = cx - ((cx - panX) / zoom) * nz;
+      panY = cy - ((cy - panY) / zoom) * nz;
+      zoom = nz;
+      applyT();
+    },
+    { passive: false },
+  );
+  document.getElementById('btn-zoom-in').addEventListener('click', () => {
+    zoom = Math.min(MAXZ, zoom + 0.15);
+    applyT();
+  });
+  document.getElementById('btn-zoom-out').addEventListener('click', () => {
+    zoom = Math.max(MINZ, zoom - 0.15);
+    applyT();
+  });
+  document.getElementById('btn-fit').addEventListener('click', fit);
+  document.getElementById('panel-close').addEventListener('click', () => {
+    pinned = null;
+    highlight(null);
+    closePanel();
+  });
+  document.getElementById('search').addEventListener('input', () => {
+    pinned = null;
+    highlight(null);
+  });
+  document.getElementById('canvas-container').addEventListener('mousemove', (e) => {
+    if (tip.classList.contains('hidden')) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    tip.style.left = `${e.clientX - r.left + 14}px`;
+    tip.style.top = `${e.clientY - r.top - 8}px`;
+  });
+  document.querySelectorAll('[data-view]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      currentView = btn.getAttribute('data-view');
+      document.querySelectorAll('[data-view]').forEach((b) => {
+        const on = b === btn;
+        b.className = on
+          ? 'px-3 py-1.5 rounded-md text-sm font-medium bg-slate-900 text-white'
+          : 'px-3 py-1.5 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100';
+      });
+      render();
+    });
+  });
+  window.addEventListener('resize', () => {
+    if (layout) applyT();
+  });
+
+  render();
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,1062 @@
+{
+  "project": "Hachi",
+  "updatedAt": "2026-09-17",
+  "featureModel": "docs/feature-model.json",
+  "context": {
+    "system": {
+      "name": "Hachi",
+      "description": "Echo Show 5 (2nd gen) の LineageOS 上で常時動く、壁掛けの音声 AI アシスタント。サーバーを持たず、端末から各サービスへ直接つなぐ。"
+    },
+    "actors": [
+      {
+        "id": "resident",
+        "name": "住人",
+        "kind": "human",
+        "description": "壁に掛かった端末の前に立つ人。会話も設定も同じ 1 人が行う。",
+        "goals": [
+          "話しかけて用を足す",
+          "時計・天気・雨雲をひと目で見る",
+          "返答が長すぎるとき黙らせる",
+          "いくら使ったか把握し、上限を決める",
+          "天気を引く場所とモデル・声を選ぶ"
+        ]
+      },
+      {
+        "id": "gemini-model",
+        "name": "Gemini モデル",
+        "kind": "system",
+        "description": "会話の向こう側。足りない事実があると function calling で端末側の道具を呼び返してくる。この向きだけはアプリが呼ばれる側になる。",
+        "goals": [
+          "いまの時刻を取る",
+          "設定された場所の天気と 1 時間先の雨を取る"
+        ]
+      },
+      {
+        "id": "refresh-timer",
+        "name": "更新タイマー",
+        "kind": "system",
+        "description": "画面が出ている間だけ 15 分ごとに回る端末内のタイマー。伏せられている間は止まる。",
+        "goals": [
+          "天気の写しを古くしない"
+        ]
+      },
+      {
+        "id": "developer",
+        "name": "開発機",
+        "kind": "system",
+        "description": "adb でつながった開発用の PC。debug ビルドにだけ届く。",
+        "goals": [
+          "5 インチの画面で打つには長すぎる値を設定に流し込む",
+          "空の情景を固定して見た目を確かめる"
+        ]
+      }
+    ],
+    "externals": [
+      {
+        "id": "gemini-live",
+        "name": "Gemini Live API",
+        "kind": "api",
+        "direction": "bidirectional",
+        "protocol": "WebSocket (BidiGenerateContent, v1beta)",
+        "criticality": "high",
+        "description": "会話そのもの。音声を上げて音声・両側の文字起こし・道具呼び出し・使用報告が下りてくる。ターン判定はサーバー側 VAD。",
+        "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/GeminiLiveClient.kt" }]
+      },
+      {
+        "id": "gemini-models",
+        "name": "Gemini ListModels",
+        "kind": "api",
+        "direction": "outbound",
+        "protocol": "REST (v1beta)",
+        "criticality": "low",
+        "description": "会話に使えるモデルの一覧。落ちても内蔵の既定一覧に倒れるだけ。",
+        "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/ModelCatalog.kt" }]
+      },
+      {
+        "id": "open-meteo",
+        "name": "Open-Meteo",
+        "kind": "api",
+        "direction": "outbound",
+        "protocol": "REST",
+        "criticality": "medium",
+        "description": "予報とジオコーディング。アカウントも鍵も要らず全世界。温度と日単位の予報を担う。",
+        "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Weather.kt" }]
+      },
+      {
+        "id": "yahoo-yolp",
+        "name": "Yahoo! Japan 気象情報 (YOLP)",
+        "kind": "api",
+        "direction": "outbound",
+        "protocol": "REST",
+        "criticality": "low",
+        "description": "10 分刻み・60 分先までの雨量。日本限定で application id が要る。未設定ならこの半分だけ黙って落ちる。",
+        "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/RainRadar.kt" }]
+      },
+      {
+        "id": "jma-nowcast",
+        "name": "気象庁 高解像度降水ナウキャスト",
+        "kind": "api",
+        "direction": "outbound",
+        "protocol": "REST (XYZ タイル + targetTimes JSON)",
+        "criticality": "low",
+        "description": "雨雲レーダーのタイルと、描けるコマの時刻一覧。",
+        "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/RadarTiles.kt" }]
+      },
+      {
+        "id": "gsi-tiles",
+        "name": "地理院タイル（淡色地図）",
+        "kind": "api",
+        "direction": "outbound",
+        "protocol": "REST (XYZ タイル)",
+        "criticality": "low",
+        "description": "雨雲を重ねる下地の地図。取得したタイルは端末のキャッシュに 32 MB まで置く。",
+        "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/RadarTiles.kt" }]
+      },
+      {
+        "id": "android-keystore",
+        "name": "Android Keystore",
+        "kind": "auth",
+        "direction": "outbound",
+        "protocol": "AES/GCM",
+        "criticality": "high",
+        "description": "秘密を包む鍵の置き場。鍵が消えたり入れ替わったりすると復号できない暗号文が残るので、そのときは未設定として扱う。",
+        "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Settings.kt", "line": 60 }]
+      },
+      {
+        "id": "android-audio",
+        "name": "端末の音声デバイス",
+        "kind": "other",
+        "direction": "bidirectional",
+        "protocol": "AudioRecord 16 kHz PCM16 / AudioTrack 24 kHz PCM16",
+        "criticality": "high",
+        "description": "マイクとスピーカー。この端末にはエコーキャンセラが存在せず、マイクがスピーカーの音をそのまま拾う。",
+        "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/AudioIo.kt" }]
+      }
+    ]
+  },
+  "domain": {
+    "contexts": [
+      {
+        "id": "conversation",
+        "name": "会話",
+        "description": "話しかけてから閉じるまで。音声の往復と道具の呼び出しがここに閉じている。",
+        "entities": [
+          {
+            "id": "conversation.session",
+            "name": "会話",
+            "kind": "aggregate-root",
+            "description": "1 回の会話。WebSocket セッション 1 本と 1 対 1 で、料金の計上単位でもある。",
+            "attributes": [
+              { "name": "state", "type": "State", "required": true, "description": "接続中 / 待受中 / 終了" },
+              { "name": "model", "type": "String", "required": true, "description": "開始時に設定から取ったモデル名。途中では変わらない" },
+              { "name": "voice", "type": "String", "required": true, "description": "プリセット音声名" },
+              { "name": "languageCode", "type": "String", "required": true, "description": "端末ロケールから ja-JP か en-US" },
+              { "name": "silenceTimeout", "type": "Long", "required": true, "description": "無音で閉じるまでの秒数" }
+            ],
+            "invariants": [
+              "API キーが未設定なら会話は始まらない",
+              "今日の使用額が日次上限に達していれば会話は始まらない",
+              "同時に開いている会話は高々 1 つ",
+              "会話が閉じたらマイク・スピーカー・WebSocket・音声モードのすべてが解放されている",
+              "画面が伏せられたら会話は閉じる"
+            ],
+            "lifecycle": {
+              "initial": "connecting",
+              "states": [
+                { "id": "connecting", "name": "接続中" },
+                { "id": "listening", "name": "待受中" },
+                { "id": "ended", "name": "終了" }
+              ],
+              "transitions": [
+                { "from": "connecting", "to": "listening", "trigger": "setupComplete が届く", "usecase": "talk-to-hachi" },
+                { "from": "listening", "to": "ended", "trigger": "無音のまま silenceTimeout 秒が過ぎる", "usecase": "end-on-silence" },
+                { "from": "listening", "to": "ended", "trigger": "終了ボタンが押される", "usecase": "talk-to-hachi" },
+                { "from": "listening", "to": "ended", "trigger": "今日の使用額が上限を超える", "usecase": "cap-the-spend" },
+                { "from": "listening", "to": "ended", "trigger": "サーバーが goAway を送るか接続が切れる", "usecase": "talk-to-hachi" },
+                { "from": "connecting", "to": "ended", "trigger": "接続に失敗する", "usecase": "talk-to-hachi" }
+              ]
+            },
+            "features": ["voice.conversation", "voice.conversation.start.button", "voice.conversation.end.manual"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Conversation.kt", "line": 17 }]
+          },
+          {
+            "id": "conversation.audio-stream",
+            "name": "音声の往復",
+            "kind": "entity",
+            "description": "マイクから上がる 16 kHz PCM と、スピーカーから出る 24 kHz PCM。片方が鳴っている間はもう片方を止める。",
+            "attributes": [
+              { "name": "speakerBusyUntil", "type": "Long", "required": true, "description": "渡した音声が鳴り終わる実時刻の見積もり" },
+              { "name": "tailMs", "type": "Int", "required": true, "description": "鳴り終わってから開けるまでの余白。600 ms" }
+            ],
+            "invariants": [
+              "スピーカーが鳴っている間、マイクの音は 1 バイトも送られない",
+              "鳴り終わり時刻は AudioTrack の内部位置ではなく渡した量から自前で数える（flush で壊れるため）",
+              "黙らせても会話は閉じない"
+            ],
+            "features": ["voice.half-duplex", "voice.half-duplex.gate", "voice.hush"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/AudioIo.kt" }]
+          },
+          {
+            "id": "conversation.caption",
+            "name": "字幕",
+            "kind": "value-object",
+            "description": "会話中に画面へ流れる文字起こしの断片。誰の発話かと本文だけを持つ。",
+            "attributes": [
+              { "name": "speaker", "type": "user | assistant", "required": true, "description": "" },
+              { "name": "text", "type": "String", "required": true, "description": "断片で届くので追記して繋ぐ" }
+            ],
+            "invariants": [
+              "字幕は会話が閉じると消える（履歴として残さない）"
+            ],
+            "features": ["voice.conversation.caption"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/ConversationView.kt" }]
+          },
+          {
+            "id": "conversation.tool",
+            "name": "道具",
+            "kind": "entity",
+            "description": "モデルに公開する関数。名前・宣言（JSON）・実行を 1 か所に持つ。",
+            "attributes": [
+              { "name": "name", "type": "String", "required": true, "description": "モデルから呼ばれる名前" },
+              { "name": "declaration", "type": "JSONObject", "required": true, "description": "setup で送る functionDeclaration" }
+            ],
+            "invariants": [
+              "道具は画面にも Activity にも触らない",
+              "道具の失敗は例外として投げず、失敗としてモデルに返る",
+              "道具の名前はレジストリの中で一意"
+            ],
+            "features": ["voice.tools"],
+            "refs": [
+              { "path": "app/src/main/java/dev/polidog/hachi/tools/Tool.kt" },
+              { "path": "app/src/main/java/dev/polidog/hachi/tools/ToolRegistry.kt", "line": 9 }
+            ]
+          },
+          {
+            "id": "conversation.tool-call",
+            "name": "道具の呼び出し",
+            "kind": "value-object",
+            "description": "モデルからの 1 回の関数呼び出しと、それに返す結果。",
+            "attributes": [
+              { "name": "id", "type": "String", "required": true, "description": "結果を返すときにそのまま返す" },
+              { "name": "name", "type": "String", "required": true, "description": "呼ばれた道具の名前" },
+              { "name": "args", "type": "JSONObject", "required": true, "description": "引数。無ければ空" }
+            ],
+            "invariants": [
+              "呼び出しは必ず同じ id で返す",
+              "道具は網を触るので、ソケットの読み取りスレッドでは実行しない"
+            ],
+            "features": ["voice.tools"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/GeminiLiveClient.kt", "line": 188 }]
+          }
+        ],
+        "relations": [
+          { "from": "conversation.session", "to": "conversation.audio-stream", "kind": "has-one", "name": "音声", "description": "会話が開いている間だけ存在する" },
+          { "from": "conversation.session", "to": "conversation.caption", "kind": "has-many", "name": "字幕", "description": "" },
+          { "from": "conversation.session", "to": "conversation.tool", "kind": "has-many", "name": "公開する道具", "description": "開始時にレジストリの宣言をまとめて送る" },
+          { "from": "conversation.tool-call", "to": "conversation.tool", "kind": "references", "name": "呼ぶ道具", "description": "名前で引く" }
+        ]
+      },
+      {
+        "id": "weather",
+        "name": "天気",
+        "description": "外から取ってきた気象を、画面にも道具にも同じ形で渡すところ。2 つの出どころが別の問いに答える。",
+        "entities": [
+          {
+            "id": "weather.snapshot",
+            "name": "天気の写し",
+            "kind": "aggregate-root",
+            "description": "アプリ全体で 1 部だけ持つ天気の現在値。画面も道具もこれを見る。",
+            "attributes": [
+              { "name": "place", "type": "Place?", "required": false, "description": "未設定なら天気そのものが出ない" },
+              { "name": "forecast", "type": "Forecast?", "required": false, "description": "取れなければ null" },
+              { "name": "rain", "type": "List<RainPoint>", "required": true, "description": "未設定・日本国外・取得失敗なら空" },
+              { "name": "failed", "type": "Boolean", "required": true, "description": "直近の予報取得が失敗したか" }
+            ],
+            "invariants": [
+              "場所が未設定なら予報も雨の列も空になる",
+              "写しは 15 分より古くならない（画面が出ている間）",
+              "画面が伏せられている間は取り直さない"
+            ],
+            "features": ["weather.refresh"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/WeatherStore.kt", "line": 9 }]
+          },
+          {
+            "id": "weather.place",
+            "name": "場所",
+            "kind": "value-object",
+            "description": "天気を引く 1 地点。表示名と緯度経度。",
+            "attributes": [
+              { "name": "name", "type": "String", "required": true, "description": "「渋谷, 東京都, 日本」のように、同名を見分けられる長さで持つ" },
+              { "name": "latitude", "type": "Double", "required": true, "description": "" },
+              { "name": "longitude", "type": "Double", "required": true, "description": "" }
+            ],
+            "invariants": [
+              "名前・緯度・経度の 3 つが揃って初めて場所として成立する（1 つでも欠ければ未設定）"
+            ],
+            "features": ["weather.place"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Weather.kt", "line": 10 }]
+          },
+          {
+            "id": "weather.forecast",
+            "name": "予報",
+            "kind": "entity",
+            "description": "いまの気温と天気コード、それに 3 日分の日単位の予報。",
+            "attributes": [
+              { "name": "temperature", "type": "Double", "required": true, "description": "摂氏。取れなければ NaN" },
+              { "name": "code", "type": "Int", "required": true, "description": "WMO 天気コード。不明なら -1" },
+              { "name": "isDay", "type": "Boolean", "required": true, "description": "" },
+              { "name": "days", "type": "List<Day>", "required": true, "description": "今日から 3 日" }
+            ],
+            "invariants": [
+              "形が想定と違うレスポンスは部分的に読まず、予報そのものを無しとして扱う"
+            ],
+            "features": ["weather.forecast"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Weather.kt", "line": 16 }]
+          },
+          {
+            "id": "weather.day",
+            "name": "1 日の予報",
+            "kind": "value-object",
+            "description": "日付・最高・最低・天気コード・降水確率。",
+            "attributes": [
+              { "name": "date", "type": "String", "required": true, "description": "" },
+              { "name": "high", "type": "Double", "required": true, "description": "" },
+              { "name": "low", "type": "Double", "required": true, "description": "" },
+              { "name": "code", "type": "Int", "required": true, "description": "" },
+              { "name": "rainChance", "type": "Int", "required": true, "description": "%。API が出さなければ -1（0% ではなく不明）" }
+            ],
+            "invariants": [
+              "降水確率の欠落は 0% ではなく不明として残す"
+            ],
+            "features": ["weather.forecast"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Weather.kt", "line": 13 }]
+          },
+          {
+            "id": "weather.rain-series",
+            "name": "雨の列",
+            "kind": "entity",
+            "description": "10 分刻み・60 分先までの雨量。先頭が「いま」で、実測と予測が混ざる。",
+            "attributes": [
+              { "name": "points", "type": "List<RainPoint>", "required": true, "description": "分オフセット・mm/h・実測かどうか" }
+            ],
+            "invariants": [
+              "分オフセットは端末の時計ではなく列の先頭から数える（サーバーの「いま」と数分ずれうるため）",
+              "application id が未設定なら列は空になり、天気そのものは出続ける"
+            ],
+            "features": ["weather.rain-nowcast"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/RainRadar.kt", "line": 13 }]
+          },
+          {
+            "id": "weather.rain-summary",
+            "name": "雨の要約",
+            "kind": "value-object",
+            "description": "雨の列を、口に出す価値のある事実だけに畳んだもの。",
+            "attributes": [
+              { "name": "rainingNow", "type": "Boolean", "required": true, "description": "先頭の読みが 0 より大きいか" },
+              { "name": "startsInMinutes", "type": "Int?", "required": false, "description": "いま降っていないときだけ入る" },
+              { "name": "stopsInMinutes", "type": "Int?", "required": false, "description": "いま降っているときだけ入る" },
+              { "name": "resumesInMinutes", "type": "Int?", "required": false, "description": "止んだあと 1 時間以内に戻るとき" },
+              { "name": "peakMmPerHour", "type": "Double", "required": true, "description": "" }
+            ],
+            "invariants": [
+              "降り出しと止みが同時に入ることはない（訊かれていない切れ目を語らないため）",
+              "止むことだけを言って戻りを黙らない（晴れた 1 時間に聞こえてしまうため）"
+            ],
+            "features": ["weather.rain-nowcast.summary"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/RainRadar.kt", "line": 85 }]
+          },
+          {
+            "id": "weather.sky-scene",
+            "name": "情景",
+            "kind": "enum",
+            "description": "空を描くために WMO 天気コードを畳んだ 7 区分。",
+            "attributes": [
+              { "name": "value", "type": "SkyScene", "required": true, "description": "CLEAR / PARTLY_CLOUDY / CLOUDY / FOG / RAIN / SNOW / THUNDER" }
+            ],
+            "invariants": [
+              "知らないコードは快晴に倒す（描けない情景を作らない）"
+            ],
+            "features": ["display.sky.weather-wash"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/SkyScene.kt", "line": 4 }]
+          }
+        ],
+        "relations": [
+          { "from": "weather.snapshot", "to": "weather.place", "kind": "has-one", "name": "場所", "description": "" },
+          { "from": "weather.snapshot", "to": "weather.forecast", "kind": "has-one", "name": "予報", "description": "" },
+          { "from": "weather.snapshot", "to": "weather.rain-series", "kind": "has-one", "name": "雨の列", "description": "" },
+          { "from": "weather.forecast", "to": "weather.day", "kind": "has-many", "name": "日ごと", "description": "3 日分" },
+          { "from": "weather.rain-summary", "to": "weather.rain-series", "kind": "references", "name": "畳む対象", "description": "" },
+          { "from": "weather.sky-scene", "to": "weather.forecast", "kind": "references", "name": "天気コードの出どころ", "description": "" }
+        ]
+      },
+      {
+        "id": "spend",
+        "name": "料金",
+        "description": "会話がいくらかかったか。トークン数ではなくドル額だけを持ち、Cloud Billing は見ない。",
+        "entities": [
+          {
+            "id": "spend.ledger",
+            "name": "使用額",
+            "kind": "aggregate-root",
+            "description": "日ごと・月ごとに積んだドル額。トークン数は残さない。",
+            "attributes": [
+              { "name": "todayUsd", "type": "Double", "required": true, "description": "" },
+              { "name": "monthUsd", "type": "Double", "required": true, "description": "" },
+              { "name": "baseline", "type": "Map<String, Long>", "required": true, "description": "セッション中だけ持つ、側×モダリティごとの前回累計" }
+            ],
+            "invariants": [
+              "保存するのはドル額だけで、トークン数は残さない（月の途中でモデルを変えても合算が狂わない）",
+              "計上するのは前回の報告からの増分だけ。数が減っていたらセッションが張り直されたとみて額面どおり計上する",
+              "内訳に現れない分と思考トークンも必ず計上する。見積もりが実際より低く出るほうが害が大きい",
+              "会話が閉じたらセッションの前回累計は忘れる"
+            ],
+            "features": ["spend.metering", "spend.metering.unknown-high"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Usage.kt", "line": 17 }]
+          },
+          {
+            "id": "spend.rate-card",
+            "name": "単価表",
+            "kind": "value-object",
+            "description": "モデル別・入出力別・モダリティ別の 100 万トークンあたりドル単価。",
+            "attributes": [
+              { "name": "input", "type": "Map<String, Double>", "required": true, "description": "TEXT / AUDIO / IMAGE / VIDEO" },
+              { "name": "output", "type": "Map<String, Double>", "required": true, "description": "同上" }
+            ],
+            "invariants": [
+              "表にないモデルは高いほうの単価で見る（知らないモデルで静かに安く出さない）"
+            ],
+            "features": ["spend.metering.modality"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Usage.kt", "line": 75 }]
+          },
+          {
+            "id": "spend.usage-report",
+            "name": "使用報告",
+            "kind": "value-object",
+            "description": "Live API がセッション中に送ってくるトークン数。セッションの累計として扱う。",
+            "attributes": [
+              { "name": "promptTokenCount", "type": "Long", "required": true, "description": "" },
+              { "name": "responseTokenCount", "type": "Long", "required": true, "description": "" },
+              { "name": "thoughtsTokenCount", "type": "Long", "required": false, "description": "内訳にも総数にも現れない。出力側に手で足す" },
+              { "name": "promptTokensDetails", "type": "JSONArray?", "required": false, "description": "モダリティ別の内訳。合計は総数に届かない" },
+              { "name": "responseTokensDetails", "type": "JSONArray?", "required": false, "description": "同上" }
+            ],
+            "invariants": [
+              "内訳の合計と総数の差は捨てずにテキスト単価で計上する"
+            ],
+            "features": ["spend.metering"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Usage.kt", "line": 108 }]
+          },
+          {
+            "id": "spend.daily-cap",
+            "name": "日次上限",
+            "kind": "value-object",
+            "description": "今日の使用額の天井。",
+            "attributes": [
+              { "name": "usd", "type": "Double", "required": true, "description": "0 なら無制限。負の値は 0 に丸める" }
+            ],
+            "invariants": [
+              "上限に達していたら会話を始めさせない",
+              "会話中に超えたら文の途中でもその場で閉じる"
+            ],
+            "features": ["spend.daily-cap", "voice.conversation.end.cap"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Settings.kt", "line": 52 }]
+          }
+        ],
+        "relations": [
+          { "from": "spend.ledger", "to": "spend.usage-report", "kind": "references", "name": "積む元", "description": "" },
+          { "from": "spend.ledger", "to": "spend.rate-card", "kind": "references", "name": "掛ける単価", "description": "報告が届いた時点のモデルの単価" },
+          { "from": "spend.daily-cap", "to": "spend.ledger", "kind": "references", "name": "比べる相手", "description": "" }
+        ]
+      },
+      {
+        "id": "settings",
+        "name": "設定",
+        "description": "ユーザーに見える値ぜんぶ。1 つの SharedPreferences に入り、秘密だけ暗号化して入る。",
+        "entities": [
+          {
+            "id": "settings.preferences",
+            "name": "設定",
+            "kind": "aggregate-root",
+            "description": "SharedPreferences 1 つ。読み書きはここ経由だけ。",
+            "attributes": [
+              { "name": "geminiKey", "type": "Secret", "required": false, "description": "未設定なら会話が始まらない" },
+              { "name": "yahooAppId", "type": "Secret", "required": false, "description": "未設定なら雨の列だけが落ちる" },
+              { "name": "model", "type": "String", "required": true, "description": "既定 gemini-3.8-live" },
+              { "name": "voice", "type": "String", "required": true, "description": "既定 Aoede" },
+              { "name": "silenceTimeout", "type": "Long", "required": true, "description": "既定 30 秒。5〜600 に丸める" },
+              { "name": "dailyCap", "type": "Double", "required": true, "description": "既定 $0.50。0 で無制限" },
+              { "name": "weatherPlace / weatherLat / weatherLon", "type": "String", "required": false, "description": "3 つ揃って初めて場所になる" },
+              { "name": "radarZoom", "type": "Int", "required": false, "description": "最後に選んだレーダーの縮尺" }
+            ],
+            "invariants": [
+              "秘密は必ず暗号化して入る。API キーとアクセストークンを平文で書かない",
+              "変更は触った時点で保存される（「適用」はない）",
+              "端末の外へは出さない（allowBackup=false）"
+            ],
+            "features": ["config.screen", "config.backup-off"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Settings.kt", "line": 18 }]
+          },
+          {
+            "id": "settings.secret",
+            "name": "秘密",
+            "kind": "value-object",
+            "description": "Keystore の鍵で包んだ値。`<Base64 IV>:<Base64 暗号文>` の形で保存される。",
+            "attributes": [
+              { "name": "iv", "type": "String", "required": true, "description": "" },
+              { "name": "ciphertext", "type": "String", "required": true, "description": "" }
+            ],
+            "invariants": [
+              "復号できない秘密は例外ではなく未設定として返す（起動のたびに落ちるより入れ直せるほうがよい）",
+              "画面に出すのは末尾 4 文字だけ。2 つの鍵を見分けられる以上のことはしない"
+            ],
+            "features": ["config.secret-storage"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Settings.kt", "line": 75 }]
+          },
+          {
+            "id": "settings.model-catalog",
+            "name": "モデル一覧",
+            "kind": "entity",
+            "description": "会話に使える Gemini モデルの候補。",
+            "attributes": [
+              { "name": "names", "type": "List<String>", "required": true, "description": "models/ を外した名前。並べ替えてある" }
+            ],
+            "invariants": [
+              "bidiGenerateContent を名乗るモデルだけを載せる",
+              "取れないとき・空のときは内蔵の既定一覧に倒す"
+            ],
+            "features": ["voice.model", "voice.model.catalog", "voice.model.fallback"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/ModelCatalog.kt", "line": 14 }]
+          }
+        ],
+        "relations": [
+          { "from": "settings.preferences", "to": "settings.secret", "kind": "has-many", "name": "秘密", "description": "" },
+          { "from": "settings.preferences", "to": "settings.model-catalog", "kind": "references", "name": "選べるモデル", "description": "" }
+        ]
+      },
+      {
+        "id": "display",
+        "name": "画面",
+        "description": "壁に掛かって見えているもの。ページャと、その背後の空と、レーダーの地図。",
+        "entities": [
+          {
+            "id": "display.home",
+            "name": "ホーム",
+            "kind": "aggregate-root",
+            "description": "横スワイプで切り替わるページの束と、その上に重なる会話オーバーレイ・使用額・設定ボタン。",
+            "attributes": [
+              { "name": "currentPage", "type": "Int", "required": true, "description": "0=時計 1=天気 2=雨雲" },
+              { "name": "pageCount", "type": "Int", "required": true, "description": "現在 3" }
+            ],
+            "invariants": [
+              "画面は消えない（壁掛けなので常時点いている）",
+              "会話中はトークボタンを隠し、終わったら戻す",
+              "どのページの上でも文字が読める（淡色地図の上でも白飛びしない）"
+            ],
+            "features": ["display.pager", "display.always-on"],
+            "refs": [
+              { "path": "app/src/main/java/dev/polidog/hachi/MainActivity.kt", "line": 21 },
+              { "path": "app/src/main/java/dev/polidog/hachi/PagerView.kt" }
+            ]
+          },
+          {
+            "id": "display.day-palette",
+            "name": "昼のパレット",
+            "kind": "value-object",
+            "description": "ある時刻における空の 3 色（上・中・下）。",
+            "attributes": [
+              { "name": "top", "type": "Int", "required": true, "description": "" },
+              { "name": "middle", "type": "Int", "required": true, "description": "" },
+              { "name": "bottom", "type": "Int", "required": true, "description": "" }
+            ],
+            "invariants": [
+              "キーフレームの間はチャンネルごとに補間する（夜明けと日暮れで飛ばない）",
+              "1 日は巡る。最後のキーフレームは真夜中へ戻る",
+              "天気で褪せても時刻は透けて残る（曇りの昼は曇りの夕方より明るい）"
+            ],
+            "features": ["display.sky", "display.sky.time-of-day"],
+            "refs": [
+              { "path": "app/src/main/java/dev/polidog/hachi/DayPalette.kt", "line": 9 },
+              { "path": "app/src/main/java/dev/polidog/hachi/SkyScene.kt", "line": 36 }
+            ]
+          },
+          {
+            "id": "display.map-tile",
+            "name": "タイル",
+            "kind": "value-object",
+            "description": "Web Mercator の 1 枚。淡色地図と雨雲で同じ座標を使う。",
+            "attributes": [
+              { "name": "zoom", "type": "Int", "required": true, "description": "" },
+              { "name": "x", "type": "Int", "required": true, "description": "" },
+              { "name": "y", "type": "Int", "required": true, "description": "" }
+            ],
+            "invariants": [
+              "端末密度に合わせて拡大せず原寸で描く",
+              "取れなかったタイルは穴として残し、ページ全体を落とさない"
+            ],
+            "features": ["display.radar-map"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/RadarTiles.kt", "line": 18 }]
+          },
+          {
+            "id": "display.radar-frame",
+            "name": "コマ",
+            "kind": "entity",
+            "description": "ナウキャストの 1 時刻分。いまは現在のコマだけを描く。",
+            "attributes": [
+              { "name": "basetime", "type": "String", "required": true, "description": "targetTimes が返す時刻文字列" }
+            ],
+            "invariants": [
+              "描くのは現在のコマだけ（過去と先 1 時間も出ているが、20 コマ分のタイルを抱えることになるので待つ）"
+            ],
+            "features": ["display.radar-map", "display.radar-map.animation"],
+            "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/RadarTiles.kt", "line": 44 }]
+          }
+        ],
+        "relations": [
+          { "from": "display.home", "to": "display.day-palette", "kind": "references", "name": "背後の空", "description": "" },
+          { "from": "display.radar-frame", "to": "display.map-tile", "kind": "has-many", "name": "タイル", "description": "" }
+        ]
+      }
+    ],
+    "contextRelations": [
+      { "from": "conversation", "to": "settings", "kind": "conformist", "description": "会話は開始時に設定を読むだけで、設定の形に合わせる。設定を書き換えることはない" },
+      { "from": "conversation", "to": "spend", "kind": "upstream-downstream", "description": "会話が使用報告を流し、料金が積む。上限に達したことは会話へ返ってきて会話を閉じる" },
+      { "from": "conversation", "to": "weather", "kind": "anti-corruption-layer", "description": "道具（get_weather）が天気の形をモデル向けの JSON に翻訳する。会話は天気の型を直に扱わない" },
+      { "from": "spend", "to": "settings", "kind": "conformist", "description": "日次上限は設定から読む" },
+      { "from": "weather", "to": "settings", "kind": "conformist", "description": "場所と Yahoo! application id は設定から読む" },
+      { "from": "settings", "to": "weather", "kind": "upstream-downstream", "description": "場所を選ぶ画面はジオコーディングで得た場所をそのまま設定へ書く" },
+      { "from": "display", "to": "weather", "kind": "upstream-downstream", "description": "3 ページとも天気の写しを見て描く。空の退色も情景から来る" },
+      { "from": "display", "to": "conversation", "kind": "upstream-downstream", "description": "ホームが会話を開始し、状態・字幕・使用額を受け取って描く。逆向きには画面を知らない" },
+      { "from": "display", "to": "spend", "kind": "conformist", "description": "使用額の表示は料金が整えた文字列をそのまま出す" },
+      { "from": "display", "to": "settings", "kind": "conformist", "description": "レーダーの縮尺だけは設定に覚えさせる" }
+    ]
+  },
+  "usecases": [
+    {
+      "id": "talk-to-hachi",
+      "name": "話しかける",
+      "actor": "resident",
+      "context": "conversation",
+      "status": "done",
+      "description": "トークボタンから会話を張り、音声を往復させ、閉じる。",
+      "trigger": "トークボタンを押す",
+      "entrypoints": [
+        { "kind": "ui", "value": "ホーム下部のトークボタン", "ref": { "path": "app/src/main/java/dev/polidog/hachi/MainActivity.kt", "line": 135 } }
+      ],
+      "mainFlow": [
+        "マイク権限が未許可なら要求し、許可されたら続ける",
+        "API キーと今日の使用額を確かめ、どちらかが通らなければ理由を出して終わる",
+        "音声モードに入り、スピーカーとマイクを起こす",
+        "setup（モデル・声・言語・システム指示・道具の宣言・両側の文字起こし）を送り setupComplete を待つ",
+        "マイクの音を上げ、下りてきた音声を鳴らし、両側の文字起こしを字幕に流す",
+        "終了ボタン・無音・上限・切断のいずれかで閉じ、マイク・スピーカー・ソケット・音声モードを解放する"
+      ],
+      "outcome": "会話が閉じ、使われた分が使用額に積まれ、トークボタンが戻っている",
+      "reads": ["settings.preferences", "spend.ledger", "spend.daily-cap", "conversation.tool"],
+      "writes": ["conversation.session", "conversation.audio-stream", "conversation.caption"],
+      "externals": ["gemini-live", "android-audio"],
+      "features": ["voice.conversation", "voice.conversation.start.button", "voice.conversation.end.manual", "voice.conversation.caption", "voice.half-duplex", "voice.half-duplex.gate", "voice.voice-choice"],
+      "refs": [
+        { "path": "app/src/main/java/dev/polidog/hachi/Conversation.kt", "line": 58 },
+        { "path": "app/src/main/java/dev/polidog/hachi/GeminiLiveClient.kt", "line": 59 }
+      ]
+    },
+    {
+      "id": "hush-the-reply",
+      "name": "返答を黙らせる",
+      "actor": "resident",
+      "context": "conversation",
+      "status": "done",
+      "description": "長すぎる返答を途中で捨てる。会話は続く。",
+      "trigger": "返答が鳴っている間に画面を触る",
+      "entrypoints": [
+        { "kind": "ui", "value": "会話オーバーレイのタップ", "ref": { "path": "app/src/main/java/dev/polidog/hachi/ConversationView.kt" } }
+      ],
+      "mainFlow": [
+        "再生待ちの音声をすべて落とす",
+        "鳴り終わり時刻をいまに戻し、送信ゲートを開ける",
+        "マイクの音がまた上がりはじめる"
+      ],
+      "outcome": "返答が止まり、会話は待受中のまま続いている",
+      "reads": [],
+      "writes": ["conversation.audio-stream"],
+      "externals": ["android-audio"],
+      "features": ["voice.hush"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Conversation.kt", "line": 54 }]
+    },
+    {
+      "id": "end-on-silence",
+      "name": "無音で終わる",
+      "actor": "resident",
+      "context": "conversation",
+      "status": "done",
+      "description": "誰も喋らなくなった会話を勝手に閉じる。壁に掛かったまま課金され続けないように。",
+      "trigger": "どちらの発話も届かないまま silenceTimeout 秒が過ぎる",
+      "entrypoints": [
+        { "kind": "event", "value": "無音タイマーの満了", "ref": { "path": "app/src/main/java/dev/polidog/hachi/Conversation.kt", "line": 149 } }
+      ],
+      "mainFlow": [
+        "ユーザーの文字起こし・モデルの文字起こし・ターン終了のいずれかが届くたびにタイマーを数え直す",
+        "どれも来ないまま設定の秒数が過ぎたら会話を閉じる"
+      ],
+      "outcome": "会話が閉じ、トークボタンが戻っている",
+      "reads": ["settings.preferences"],
+      "writes": ["conversation.session"],
+      "externals": [],
+      "features": ["voice.conversation.end.silence"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Conversation.kt", "line": 46 }]
+    },
+    {
+      "id": "answer-with-time",
+      "name": "道具で時刻を答える",
+      "actor": "gemini-model",
+      "context": "conversation",
+      "status": "done",
+      "description": "モデルが現在時刻を訊いてきたときに端末の時計で答える。",
+      "trigger": "toolCall で get_current_time が呼ばれる",
+      "entrypoints": [
+        { "kind": "event", "value": "toolCall get_current_time", "ref": { "path": "app/src/main/java/dev/polidog/hachi/tools/GetCurrentTimeTool.kt" } }
+      ],
+      "mainFlow": [
+        "ソケットの読み取りスレッドを離れて別スレッドで走らせる",
+        "端末のロケールとタイムゾーンで現在時刻を組み立てる",
+        "同じ id で toolResponse を返す"
+      ],
+      "outcome": "モデルが時刻を知った状態で返答を続けている",
+      "reads": ["conversation.tool"],
+      "writes": ["conversation.tool-call"],
+      "externals": [],
+      "features": ["voice.tools", "voice.tools.time"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/tools/GetCurrentTimeTool.kt" }]
+    },
+    {
+      "id": "answer-with-weather",
+      "name": "道具で天気を答える",
+      "actor": "gemini-model",
+      "context": "conversation",
+      "status": "done",
+      "description": "設定された場所の天気を、モデルが読める JSON にして返す。web 検索より先にこれを使わせる。",
+      "trigger": "toolCall で get_weather が呼ばれる",
+      "entrypoints": [
+        { "kind": "event", "value": "toolCall get_weather", "ref": { "path": "app/src/main/java/dev/polidog/hachi/tools/GetWeatherTool.kt", "line": 33 } }
+      ],
+      "mainFlow": [
+        "場所が未設定なら weather_place_not_set を返して終わる",
+        "予報を取り、取れなければ weather_unavailable を返して終わる",
+        "現在・今日・明日を組み立てる（降水確率は不明なら入れない）",
+        "日本かつ application id があれば雨の列も取り、要約と 10 分刻みの並びを添える",
+        "同じ id で toolResponse を返す"
+      ],
+      "outcome": "モデルが天気と、日本なら 1 時間先の雨まで知った状態で答えている",
+      "reads": ["settings.preferences", "weather.place", "weather.forecast", "weather.rain-series", "weather.rain-summary", "conversation.tool"],
+      "writes": ["conversation.tool-call"],
+      "externals": ["open-meteo", "yahoo-yolp"],
+      "features": ["voice.tools", "voice.tools.weather", "weather.forecast", "weather.rain-nowcast", "weather.rain-nowcast.summary"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/tools/GetWeatherTool.kt" }]
+    },
+    {
+      "id": "meter-the-spend",
+      "name": "使った分を積む",
+      "actor": "gemini-model",
+      "context": "spend",
+      "status": "done",
+      "description": "セッション中に届く使用報告から、その場でドル額を積む。",
+      "trigger": "usageMetadata が届く",
+      "entrypoints": [
+        { "kind": "event", "value": "usageMetadata", "ref": { "path": "app/src/main/java/dev/polidog/hachi/GeminiLiveClient.kt", "line": 198 } }
+      ],
+      "mainFlow": [
+        "いまのモデルの単価表を引く（未知なら高いほうで見る）",
+        "入力と出力それぞれについて、モダリティ別の内訳に単価を掛ける",
+        "思考トークンを出力側に足し、内訳に現れない分はテキスト単価で足す",
+        "前回の累計との差だけを今日と今月のドル額に積む",
+        "画面の使用額表示を書き換える"
+      ],
+      "outcome": "今日と今月のドル額が最新になっている",
+      "reads": ["spend.usage-report", "spend.rate-card"],
+      "writes": ["spend.ledger"],
+      "externals": ["gemini-live"],
+      "features": ["spend.metering", "spend.metering.modality", "spend.metering.unknown-high", "spend.display"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Usage.kt", "line": 23 }]
+    },
+    {
+      "id": "cap-the-spend",
+      "name": "上限で止める",
+      "actor": "resident",
+      "context": "spend",
+      "status": "done",
+      "description": "今日の使用額が上限に達したら会話をさせない。始める前も、始まったあとも見る。",
+      "trigger": "会話を始めようとしたとき、および使用報告が届くたび",
+      "entrypoints": [
+        { "kind": "ui", "value": "トークボタン（開始時の判定）", "ref": { "path": "app/src/main/java/dev/polidog/hachi/Conversation.kt", "line": 65 } },
+        { "kind": "event", "value": "usageMetadata（会話中の判定）", "ref": { "path": "app/src/main/java/dev/polidog/hachi/Conversation.kt", "line": 117 } }
+      ],
+      "mainFlow": [
+        "上限が 0 なら何もしない",
+        "今日の使用額と上限を比べる",
+        "達していれば、開始前なら始めさせず、会話中ならその場で閉じる",
+        "上限額を添えて画面に伝える"
+      ],
+      "outcome": "上限を超えた日は会話が張られていない",
+      "reads": ["spend.ledger", "spend.daily-cap"],
+      "writes": ["conversation.session"],
+      "externals": [],
+      "features": ["spend.daily-cap", "voice.conversation.end.cap"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Usage.kt", "line": 56 }]
+    },
+    {
+      "id": "watch-the-spend",
+      "name": "いくら使ったか見る",
+      "actor": "resident",
+      "context": "spend",
+      "status": "done",
+      "description": "今日と今月のドル額を確かめる。",
+      "trigger": "ホームを見る、または設定を開く",
+      "entrypoints": [
+        { "kind": "ui", "value": "ホーム右上の使用額", "ref": { "path": "app/src/main/java/dev/polidog/hachi/MainActivity.kt", "line": 51 } },
+        { "kind": "ui", "value": "設定 > 使用額", "ref": { "path": "app/src/main/java/dev/polidog/hachi/SettingsActivity.kt", "line": 188 } }
+      ],
+      "mainFlow": [
+        "今日と今月のドル額を読む",
+        "小数 3 桁で並べて出す（小さい数字でも動いて見えるように）"
+      ],
+      "outcome": "いま何ドル使っているかが画面から読める",
+      "reads": ["spend.ledger"],
+      "writes": [],
+      "externals": [],
+      "features": ["spend.display"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Usage.kt", "line": 59 }]
+    },
+    {
+      "id": "refresh-the-weather",
+      "name": "天気を取り直す",
+      "actor": "refresh-timer",
+      "context": "weather",
+      "status": "done",
+      "description": "アプリ全体で 1 部だけ持つ天気の写しを、画面が出ている間だけ 15 分ごとに更新する。",
+      "trigger": "画面が戻ってきたとき、およびその後 15 分ごと",
+      "entrypoints": [
+        { "kind": "event", "value": "onResume / 15 分タイマー", "ref": { "path": "app/src/main/java/dev/polidog/hachi/WeatherStore.kt", "line": 45 } }
+      ],
+      "mainFlow": [
+        "場所が未設定なら空の写しを配って終わる",
+        "別スレッドで予報と雨の列を続けて取る",
+        "取れた結果（失敗フラグ込み）で写しを差し替える",
+        "天気ページ・レーダーページ・空に配る"
+      ],
+      "outcome": "3 ページと空が同じ 1 部の天気を見ている",
+      "reads": ["settings.preferences", "weather.place"],
+      "writes": ["weather.snapshot", "weather.forecast", "weather.rain-series"],
+      "externals": ["open-meteo", "yahoo-yolp"],
+      "features": ["weather.refresh", "weather.forecast", "weather.rain-nowcast"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/WeatherStore.kt", "line": 52 }]
+    },
+    {
+      "id": "see-the-clock",
+      "name": "時計を見る",
+      "actor": "resident",
+      "context": "display",
+      "status": "done",
+      "description": "既定のページ。空を背にした時計。",
+      "trigger": "ホームを見る",
+      "entrypoints": [
+        { "kind": "ui", "value": "ホーム 1 ページ目", "ref": { "path": "app/src/main/java/dev/polidog/hachi/ClockView.kt" } }
+      ],
+      "mainFlow": [
+        "いまの時刻からその時刻の空の 3 色を補間する",
+        "天気の情景でその色を褪せさせる",
+        "背後にグラデーションを敷き、時計を重ねる"
+      ],
+      "outcome": "時刻と、いまの空模様が同じ画面から読める",
+      "reads": ["weather.snapshot", "weather.sky-scene", "display.day-palette"],
+      "writes": [],
+      "externals": [],
+      "features": ["display.pager.clock", "display.sky", "display.sky.time-of-day", "display.sky.weather-wash"],
+      "refs": [
+        { "path": "app/src/main/java/dev/polidog/hachi/ClockView.kt" },
+        { "path": "app/src/main/java/dev/polidog/hachi/SkyView.kt" }
+      ]
+    },
+    {
+      "id": "see-the-weather",
+      "name": "天気を見る",
+      "actor": "resident",
+      "context": "display",
+      "status": "done",
+      "description": "現在の気温と天気、今日と明日、あれば 1 時間先までの雨のタイムライン。",
+      "trigger": "ホームを 1 枚めくる",
+      "entrypoints": [
+        { "kind": "ui", "value": "ホーム 2 ページ目", "ref": { "path": "app/src/main/java/dev/polidog/hachi/WeatherPage.kt" } }
+      ],
+      "mainFlow": [
+        "場所が未設定なら、設定するよう促して終わる",
+        "現在の気温・天気と、今日・明日の最高／最低／降水確率を並べる",
+        "雨の列があれば 10 分刻みの帯として描き、要約を文にして添える",
+        "直近の取得が失敗していればそれと分かるように出す"
+      ],
+      "outcome": "傘が要るかどうかが画面から分かる",
+      "reads": ["weather.snapshot", "weather.forecast", "weather.day", "weather.rain-series", "weather.rain-summary"],
+      "writes": [],
+      "externals": [],
+      "features": ["display.pager.weather", "weather.forecast", "weather.rain-nowcast.timeline", "weather.rain-nowcast.summary"],
+      "refs": [
+        { "path": "app/src/main/java/dev/polidog/hachi/WeatherPage.kt" },
+        { "path": "app/src/main/java/dev/polidog/hachi/RainTimelineView.kt" },
+        { "path": "app/src/main/java/dev/polidog/hachi/WeatherText.kt" }
+      ]
+    },
+    {
+      "id": "see-the-radar",
+      "name": "雨雲を見る",
+      "actor": "resident",
+      "context": "display",
+      "status": "done",
+      "description": "設定した場所を中心に、淡色地図へ雨雲を重ねる。タップで縮尺が巡る。",
+      "trigger": "ホームを 2 枚めくる",
+      "entrypoints": [
+        { "kind": "ui", "value": "ホーム 3 ページ目（タップで縮尺切替）", "ref": { "path": "app/src/main/java/dev/polidog/hachi/RadarPage.kt", "line": 28 } }
+      ],
+      "mainFlow": [
+        "描けるコマの時刻一覧を取り、いちばん新しいコマを選ぶ",
+        "場所を中心に、画面を覆うだけのタイル座標を数える",
+        "淡色地図と雨雲のタイルを取って重ねる（取れなかったタイルは穴のまま）",
+        "画面の幅が何 km かを出典表示の横に書く",
+        "タップされたら次の縮尺へ巡り、選んだ縮尺を覚える"
+      ],
+      "outcome": "雨雲がどこにあってどちらへ向かっているかが、縮尺付きで見える",
+      "reads": ["weather.snapshot", "weather.place", "display.radar-frame", "display.map-tile", "settings.preferences"],
+      "writes": ["settings.preferences"],
+      "externals": ["jma-nowcast", "gsi-tiles"],
+      "features": ["display.pager.radar", "display.radar-map", "display.radar-map.zoom", "display.radar-map.scale"],
+      "refs": [
+        { "path": "app/src/main/java/dev/polidog/hachi/RadarPage.kt" },
+        { "path": "app/src/main/java/dev/polidog/hachi/RadarTiles.kt" }
+      ]
+    },
+    {
+      "id": "choose-the-place",
+      "name": "天気の場所を選ぶ",
+      "actor": "resident",
+      "context": "settings",
+      "status": "done",
+      "description": "地名で検索して、天気とレーダーの中心になる 1 地点を決める。",
+      "trigger": "設定 > 場所 を開く",
+      "entrypoints": [
+        { "kind": "ui", "value": "設定 > 天気 > 場所", "ref": { "path": "app/src/main/java/dev/polidog/hachi/SettingsActivity.kt", "line": 328 } }
+      ],
+      "mainFlow": [
+        "地名を打つ",
+        "ジオコーディングで候補を引く（同名を見分けられるよう県・国まで並べる）",
+        "1 つ選ぶと名前と緯度経度が保存される",
+        "ホームへ戻ると天気とレーダーがその場所で描き直される"
+      ],
+      "outcome": "天気・レーダー・天気の道具のすべてが同じ場所を指している",
+      "reads": [],
+      "writes": ["settings.preferences", "weather.place"],
+      "externals": ["open-meteo"],
+      "features": ["weather.place", "config.screen"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Weather.kt", "line": 52 }]
+    },
+    {
+      "id": "set-credentials",
+      "name": "鍵を入れる",
+      "actor": "resident",
+      "context": "settings",
+      "status": "done",
+      "description": "Gemini の API キーと Yahoo! の application id を、暗号化して保存する。",
+      "trigger": "設定 > API キー / Yahoo! application id を開く",
+      "entrypoints": [
+        { "kind": "ui", "value": "設定 > 会話 > API キー", "ref": { "path": "app/src/main/java/dev/polidog/hachi/SettingsActivity.kt", "line": 96 } },
+        { "kind": "ui", "value": "設定 > 天気 > Yahoo! application id", "ref": { "path": "app/src/main/java/dev/polidog/hachi/SettingsActivity.kt", "line": 157 } }
+      ],
+      "mainFlow": [
+        "Keystore の鍵を取り出す（無ければその場で作る）",
+        "値を AES/GCM で包み `<IV>:<暗号文>` として保存する",
+        "一覧には末尾 4 文字だけを出す"
+      ],
+      "outcome": "鍵が平文でディスクに残っておらず、端末の外にも出ない",
+      "reads": [],
+      "writes": ["settings.preferences", "settings.secret"],
+      "externals": ["android-keystore"],
+      "features": ["config.secret-storage", "config.screen", "config.backup-off"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Settings.kt", "line": 91 }]
+    },
+    {
+      "id": "choose-model-and-voice",
+      "name": "モデルと声を選ぶ",
+      "actor": "resident",
+      "context": "settings",
+      "status": "done",
+      "description": "会話に使う Live モデルとプリセット音声を選ぶ。",
+      "trigger": "設定 > モデル / 声 を開く",
+      "entrypoints": [
+        { "kind": "ui", "value": "設定 > 会話 > モデル", "ref": { "path": "app/src/main/java/dev/polidog/hachi/SettingsActivity.kt", "line": 112 } },
+        { "kind": "ui", "value": "設定 > 会話 > 声", "ref": { "path": "app/src/main/java/dev/polidog/hachi/SettingsActivity.kt", "line": 125 } }
+      ],
+      "mainFlow": [
+        "API キーがあれば ListModels を引き、bidiGenerateContent を名乗るものだけに絞る",
+        "引けなければ内蔵の既定一覧を出す",
+        "モデルと声をそれぞれ 1 つ選ぶ",
+        "次の会話から使われる（進行中の会話は変わらない）"
+      ],
+      "outcome": "次の会話が選んだモデルと声で始まる",
+      "reads": ["settings.model-catalog"],
+      "writes": ["settings.preferences"],
+      "externals": ["gemini-models"],
+      "features": ["voice.model", "voice.model.catalog", "voice.model.fallback", "voice.voice-choice", "config.screen"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/ModelCatalog.kt", "line": 26 }]
+    },
+    {
+      "id": "set-limits",
+      "name": "上限と無音の秒数を決める",
+      "actor": "resident",
+      "context": "settings",
+      "status": "done",
+      "description": "1 日いくらまで使ってよいか、何秒黙ったら会話を切るかを決める。",
+      "trigger": "設定 > 日次上限 / 無音タイムアウト を開く",
+      "entrypoints": [
+        { "kind": "ui", "value": "設定 > 料金 > 日次上限", "ref": { "path": "app/src/main/java/dev/polidog/hachi/SettingsActivity.kt", "line": 173 } },
+        { "kind": "ui", "value": "設定 > 会話 > 無音タイムアウト", "ref": { "path": "app/src/main/java/dev/polidog/hachi/SettingsActivity.kt", "line": 139 } }
+      ],
+      "mainFlow": [
+        "数字を打つ（空なら既定に戻る）",
+        "上限は 0 以上に、無音の秒数は 5〜600 に丸めて保存する",
+        "次に会話を始めるときから効く"
+      ],
+      "outcome": "使いすぎと切り忘れの両方に天井がある",
+      "reads": [],
+      "writes": ["settings.preferences", "spend.daily-cap"],
+      "externals": [],
+      "features": ["spend.daily-cap", "voice.conversation.end.silence", "config.screen"],
+      "refs": [{ "path": "app/src/main/java/dev/polidog/hachi/Settings.kt", "line": 51 }]
+    },
+    {
+      "id": "push-setting-from-dev-machine",
+      "name": "開発機から設定を流し込む",
+      "actor": "developer",
+      "context": "settings",
+      "status": "done",
+      "description": "5 インチの画面で打つには長すぎる値を adb のブロードキャストで入れる。debug ビルドのみ。",
+      "trigger": "開発機で am broadcast を叩く",
+      "entrypoints": [
+        { "kind": "event", "value": "am broadcast -a dev.polidog.hachi.SET -e name <名前> -e value <値>", "ref": { "path": "app/src/debug/java/dev/polidog/hachi/DebugSettingsReceiver.kt" } }
+      ],
+      "mainFlow": [
+        "設定名を見る。知らない名前なら何も書かず、知っている名前を並べて返す",
+        "秘密の名前なら暗号化して、それ以外は平文で保存する",
+        "何を書いたかをログと Toast に出す"
+      ],
+      "outcome": "長い鍵が端末に入っていて、打ち間違えた設定名は黙って通っていない",
+      "reads": [],
+      "writes": ["settings.preferences", "settings.secret"],
+      "externals": ["android-keystore"],
+      "features": ["config.adb-input", "config.secret-storage"],
+      "refs": [{ "path": "app/src/debug/java/dev/polidog/hachi/DebugSettingsReceiver.kt" }]
+    }
+  ],
+  "openQuestions": [
+    "要確認: 使用報告がセッション累計なのか 1 通ごとの差分なのかが実測できていない。差分だった場合は過小計上になる（Usage.kt の ponytail コメントと、生の usageMetadata をログに出してある）",
+    "要確認: 思考トークンが実際に出力として課金されているか。いまは課金される前提で出力側に足しており、外れていれば過大計上になる",
+    "要確認: Phase 1 で会話を Foreground Service へ移したあと、会話の所有者が Activity から Service に変わる。そのとき『画面が伏せられたら会話は閉じる』という不変条件は成り立たなくなるはずだが、代わりに何が会話を閉じるのかが決まっていない",
+    "要確認: Home Assistant / Immich の設定名（homeAssistantUrl / homeAssistantToken / immichUrl / immichKey / immichAlbum）は DebugSettingsReceiver に予約されているだけで、読む側がまだない"
+  ]
+}
