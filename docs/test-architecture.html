@@ -4,12 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>テストアーキテクチャ規約</title>
-<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+<link rel="stylesheet" href="doc.css" />
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 </head>
-<body class="bg-slate-50 dark:bg-slate-900">
-  <main class="mx-auto max-w-4xl px-6 py-10">
-    <article id="doc" class="prose prose-slate dark:prose-invert max-w-none"></article>
+<body>
+  <main>
+    <article id="doc"></article>
   </main>
   <!-- 正規データ（機械可読）: 本文の Markdown ソース。編集はこのブロックを更新する -->
   <script type="text/markdown" id="doc-source">
@@ -83,9 +83,6 @@ app/src/test/java/dev/polidog/hachi/
 - **料金の計算を変えたらテストを先に直す。** 過小計上は気づけない種類のバグで、気づくのは請求書が来たとき
 - 検証していない仮定はコードに `ponytail:` コメントで残す（例: `usageMetadata` が累計か差分かは未確定）
   </script>
-  <script>
-    document.getElementById('doc').innerHTML =
-      marked.parse(document.getElementById('doc-source').textContent.trim());
-  </script>
+  <script src="doc.js"></script>
 </body>
 </html>

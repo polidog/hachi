@@ -1,0 +1,317 @@
+/*
+ * Hachi のドキュメントの見た目。手書きの 4 本（index / architecture / roadmap /
+ * test-architecture）が共有する。自動生成の system-model.html は別の仕組みなので触らない。
+ *
+ * 暗い画面に薄い格子と、シアンの光。壁に掛かった端末の画面を想定した配色で、
+ * 明るいテーマは持たない（読むのは主に夜で、端末自体が暗い部屋に光っているため）。
+ */
+
+:root {
+  --bg: #05080e;
+  --panel: rgba(12, 20, 33, 0.72);
+  --line: rgba(79, 214, 255, 0.16);
+  --line-strong: rgba(79, 214, 255, 0.38);
+  --text: #c3d3e4;
+  --text-bright: #eaf4ff;
+  --muted: #6f8399;
+  --cyan: #4fd6ff;
+  --violet: #b98cff;
+  --amber: #ffb454;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html { color-scheme: dark; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.9;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 背景: 薄い格子 + 上からの光。position: fixed なのでスクロールしても動かない。 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1200px 520px at 50% -10%, rgba(79, 214, 255, 0.10), transparent 70%),
+    radial-gradient(900px 400px at 85% 15%, rgba(185, 140, 255, 0.06), transparent 70%),
+    repeating-linear-gradient(0deg, rgba(79, 214, 255, 0.035) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(90deg, rgba(79, 214, 255, 0.035) 0 1px, transparent 1px 64px);
+}
+
+/* ---- 上の帯（doc.js が組み立てる） ---- */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 20px;
+  padding: 12px 24px;
+  background: rgba(5, 8, 14, 0.82);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+
+.bar__label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: var(--cyan);
+  text-shadow: 0 0 18px rgba(79, 214, 255, 0.55);
+  margin-right: auto;
+}
+
+.bar a {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-decoration: none;
+  border: none;
+  transition: color 0.15s ease;
+}
+
+.bar a:hover { color: var(--cyan); }
+
+.bar a[aria-current] {
+  color: var(--text-bright);
+  border-bottom: 1px solid var(--cyan);
+}
+
+/* ---- 本文 ---- */
+
+main {
+  position: relative;
+  z-index: 1;
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 56px 24px 120px;
+}
+
+/* 角のかぎ括弧。HUD の枠のつもり。 */
+article {
+  position: relative;
+  padding: 8px 4px;
+}
+
+article::before,
+article::after {
+  content: "";
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  pointer-events: none;
+}
+
+article::before {
+  top: -20px;
+  left: -20px;
+  border-top: 1px solid var(--line-strong);
+  border-left: 1px solid var(--line-strong);
+}
+
+article::after {
+  bottom: -20px;
+  right: -20px;
+  border-bottom: 1px solid var(--line-strong);
+  border-right: 1px solid var(--line-strong);
+}
+
+h1, h2, h3, h4 {
+  color: var(--text-bright);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+h1 {
+  margin: 0 0 28px;
+  padding-bottom: 18px;
+  font-size: 34px;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--line);
+  text-shadow: 0 0 28px rgba(79, 214, 255, 0.28);
+}
+
+h2 {
+  margin: 64px 0 20px;
+  font-size: 21px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* 見出しの左の目印と、右に伸びる線。 */
+h2::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--cyan);
+  box-shadow: 0 0 14px rgba(79, 214, 255, 0.9);
+  transform: rotate(45deg);
+}
+
+h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line-strong), transparent);
+}
+
+h3 {
+  margin: 40px 0 14px;
+  font-size: 17px;
+  color: var(--cyan);
+  letter-spacing: 0.04em;
+}
+
+h3::before {
+  content: "› ";
+  color: var(--violet);
+}
+
+p { margin: 18px 0; }
+
+strong {
+  color: var(--text-bright);
+  font-weight: 600;
+}
+
+em { color: var(--violet); font-style: normal; }
+
+a {
+  color: var(--cyan);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(79, 214, 255, 0.35);
+  transition: border-color 0.15s ease, text-shadow 0.15s ease;
+}
+
+a:hover {
+  border-bottom-color: var(--cyan);
+  text-shadow: 0 0 16px rgba(79, 214, 255, 0.6);
+}
+
+ul, ol { padding-left: 22px; margin: 18px 0; }
+
+li { margin: 10px 0; }
+
+ul { list-style: none; padding-left: 4px; }
+
+ul li { position: relative; padding-left: 22px; }
+
+ul li::before {
+  content: "▸";
+  position: absolute;
+  left: 2px;
+  color: var(--cyan);
+  opacity: 0.75;
+}
+
+blockquote {
+  margin: 20px 0;
+  padding: 8px 18px;
+  border-left: 2px solid var(--violet);
+  background: rgba(185, 140, 255, 0.06);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+blockquote p { margin: 0; }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  color: var(--cyan);
+  background: rgba(79, 214, 255, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+pre {
+  margin: 24px 0;
+  padding: 20px 22px;
+  overflow-x: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--cyan);
+  border-radius: 4px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(79, 214, 255, 0.03);
+  line-height: 1.7;
+}
+
+pre code {
+  color: var(--text);
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+table {
+  width: 100%;
+  margin: 24px 0;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+
+th {
+  padding: 12px 14px;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--cyan);
+  background: rgba(79, 214, 255, 0.07);
+  border-bottom: 1px solid var(--line-strong);
+  white-space: nowrap;
+}
+
+td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(79, 214, 255, 0.08);
+  vertical-align: top;
+  line-height: 1.7;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+
+tbody tr { transition: background 0.15s ease; }
+
+tbody tr:hover { background: rgba(79, 214, 255, 0.05); }
+
+hr {
+  margin: 56px 0;
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+}
+
+::selection { background: rgba(79, 214, 255, 0.28); color: var(--text-bright); }
+
+@media (max-width: 640px) {
+  body { font-size: 15px; }
+  main { padding: 32px 16px 80px; }
+  h1 { font-size: 26px; }
+  article::before, article::after { display: none; }
+  table { display: block; overflow-x: auto; }
+}
