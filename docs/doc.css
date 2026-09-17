@@ -1,25 +1,10 @@
 /*
- * Hachi のドキュメントの見た目。手書きの 4 本（index / architecture / roadmap /
- * test-architecture）が共有する。自動生成の system-model.html は別の仕組みなので触らない。
+ * 手書きドキュメント 4 本（index / architecture / roadmap / test-architecture）の本文。
+ * 配色と上の帯は shell.css にあり、こちらより先に読む。
  *
  * 暗い画面に薄い格子と、シアンの光。壁に掛かった端末の画面を想定した配色で、
  * 明るいテーマは持たない（読むのは主に夜で、端末自体が暗い部屋に光っているため）。
  */
-
-:root {
-  --bg: #05080e;
-  --panel: rgba(12, 20, 33, 0.72);
-  --line: rgba(79, 214, 255, 0.16);
-  --line-strong: rgba(79, 214, 255, 0.38);
-  --text: #c3d3e4;
-  --text-bright: #eaf4ff;
-  --muted: #6f8399;
-  --cyan: #4fd6ff;
-  --violet: #b98cff;
-  --amber: #ffb454;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-  --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
-}
 
 * { box-sizing: border-box; }
 
@@ -48,48 +33,6 @@ body::before {
     radial-gradient(900px 400px at 85% 15%, rgba(185, 140, 255, 0.06), transparent 70%),
     repeating-linear-gradient(0deg, rgba(79, 214, 255, 0.035) 0 1px, transparent 1px 64px),
     repeating-linear-gradient(90deg, rgba(79, 214, 255, 0.035) 0 1px, transparent 1px 64px);
-}
-
-/* ---- 上の帯（doc.js が組み立てる） ---- */
-
-.bar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 20px;
-  padding: 12px 24px;
-  background: rgba(5, 8, 14, 0.82);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--line);
-}
-
-.bar__label {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.24em;
-  color: var(--cyan);
-  text-shadow: 0 0 18px rgba(79, 214, 255, 0.55);
-  margin-right: auto;
-}
-
-.bar a {
-  font-family: var(--mono);
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-  text-decoration: none;
-  border: none;
-  transition: color 0.15s ease;
-}
-
-.bar a:hover { color: var(--cyan); }
-
-.bar a[aria-current] {
-  color: var(--text-bright);
-  border-bottom: 1px solid var(--cyan);
 }
 
 /* ---- 本文 ---- */

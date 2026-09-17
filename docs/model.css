@@ -1,0 +1,77 @@
+/*
+ * system-model.html の見た目を、手書きのドキュメントに寄せる。
+ *
+ * このページは /system-model が生成するもので、Tailwind の明るいクラスが直に書かれている。
+ * HTML には手を入れず（入れても次の生成で消える）、使われているクラスと、JS が SVG に
+ * 直接置いている色を、こちらから上書きするだけにしてある。生成側の配色が変わったら、
+ * ここの色の対応表も合わなくなる。
+ */
+
+body { background: var(--bg) !important; color: var(--text) !important; font-family: var(--sans); }
+
+/* ---- 面と枠 ---- */
+
+.bg-white { background: rgba(10, 17, 28, 0.9) !important; }
+.bg-slate-50, .bg-slate-100 { background: rgba(8, 13, 22, 0.85) !important; }
+.bg-slate-800 { background: rgba(10, 17, 28, 0.96) !important; border: 1px solid var(--line); }
+
+[class*="border-slate-"] { border-color: var(--line) !important; }
+
+/* ---- 文字 ---- */
+
+.text-slate-900, .text-white { color: var(--text-bright) !important; }
+.text-slate-800, .text-slate-700, .text-slate-600 { color: var(--text) !important; }
+.text-slate-500, .text-slate-400 { color: var(--muted) !important; }
+
+h1 { letter-spacing: 0.02em; text-shadow: 0 0 22px rgba(79, 214, 255, 0.3); }
+
+code { color: var(--cyan); background: rgba(79, 214, 255, 0.08); border-radius: 3px; padding: 0 4px; }
+
+/* ---- 操作するもの ---- */
+
+button[data-view] { transition: color 0.15s ease, background 0.15s ease; }
+
+/* 選んでいるタブ。生成側は bg-slate-900 + text-white で示している。 */
+button[data-view].bg-slate-900 {
+  background: rgba(79, 214, 255, 0.14) !important;
+  color: var(--text-bright) !important;
+  box-shadow: inset 0 0 0 1px var(--line-strong), 0 0 18px rgba(79, 214, 255, 0.18);
+}
+
+button:hover.hover\:bg-slate-100, .hover\:bg-slate-100:hover, .hover\:bg-slate-50:hover {
+  background: rgba(79, 214, 255, 0.08) !important;
+  color: var(--cyan) !important;
+}
+
+input#search { background: rgba(8, 13, 22, 0.9) !important; color: var(--text); }
+input#search::placeholder { color: var(--muted); }
+
+/* 要確認の帯。琥珀色は残すが、暗いほうへ寄せる。 */
+.bg-amber-50 { background: rgba(255, 180, 84, 0.07) !important; }
+.border-amber-200 { border-color: rgba(255, 180, 84, 0.28) !important; }
+.text-amber-800, .text-amber-900 { color: var(--amber) !important; }
+
+/* ---- 図 ---- */
+
+/* 背景の点。生成側は薄い灰色を置いている。 */
+#grid circle { fill: var(--cyan); opacity: 0.22; }
+
+/* ノードの面。JS が属性で置いた色なので、CSS のほうが強い。 */
+#world rect[fill="#fff"] { fill: #0d1726; }
+#world rect[fill="#f8fafc"] { fill: rgba(79, 214, 255, 0.04); }
+#world rect[stroke="#cbd5e1"] { stroke: var(--line-strong); }
+
+/* ノードの文字。 */
+#world text[fill="#0f172a"] { fill: var(--text-bright); }
+#world text[fill="#64748b"], #world text[fill="#94a3b8"] { fill: var(--muted); }
+
+/* 線と矢印。 */
+#world path[stroke="#94a3b8"], #world line[stroke="#94a3b8"] { stroke: rgba(79, 214, 255, 0.45); }
+#arrow path { fill: rgba(79, 214, 255, 0.6); }
+
+/* 種別の色。暗い背景では沈むので、同じ色相の明るいほうへ振り替える。 */
+[fill="#1d4ed8"], [stroke="#1d4ed8"], [fill="#2563eb"], [stroke="#2563eb"] { fill: #60a5fa; stroke: #60a5fa; }
+[fill="#6b7280"], [stroke="#6b7280"] { fill: #93a7bd; stroke: #93a7bd; }
+[fill="#c2410c"], [stroke="#c2410c"] { fill: #fb923c; stroke: #fb923c; }
+[fill="#065f46"], [stroke="#065f46"] { fill: #34d399; stroke: #34d399; }
+[fill="#dc2626"], [stroke="#dc2626"] { fill: #f87171; stroke: #f87171; }

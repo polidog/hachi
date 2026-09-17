@@ -21,5 +21,7 @@ bar.innerHTML =
   ).join("");
 document.body.prepend(bar);
 
-document.getElementById("doc").innerHTML =
-  marked.parse(document.getElementById("doc-source").textContent.trim());
+// システムモデルのページには Markdown の本文がない。帯だけ作って終わる。
+const source = document.getElementById("doc-source");
+const target = document.getElementById("doc");
+if (source && target) target.innerHTML = marked.parse(source.textContent.trim());

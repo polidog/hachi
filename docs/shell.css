@@ -1,0 +1,63 @@
+/*
+ * Hachi のドキュメント共通の土台: 配色と、上の帯。
+ * 文書ページは doc.css を、システムモデルは model.css をこの後に読む。
+ */
+
+:root {
+  --bg: #05080e;
+  --panel: rgba(12, 20, 33, 0.72);
+  --line: rgba(79, 214, 255, 0.16);
+  --line-strong: rgba(79, 214, 255, 0.38);
+  --text: #c3d3e4;
+  --text-bright: #eaf4ff;
+  --muted: #6f8399;
+  --cyan: #4fd6ff;
+  --violet: #b98cff;
+  --amber: #ffb454;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+}
+
+/* ---- 上の帯（doc.js が組み立てる） ---- */
+
+.bar {
+  flex: none;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 20px;
+  padding: 12px 24px;
+  background: rgba(5, 8, 14, 0.82);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+
+.bar__label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: var(--cyan);
+  text-shadow: 0 0 18px rgba(79, 214, 255, 0.55);
+  margin-right: auto;
+}
+
+.bar a {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-decoration: none;
+  border: none;
+  transition: color 0.15s ease;
+}
+
+.bar a:hover { color: var(--cyan); }
+
+.bar a[aria-current] {
+  color: var(--text-bright);
+  border-bottom: 1px solid var(--cyan);
+}
+
