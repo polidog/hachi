@@ -68,4 +68,7 @@
     <string name="rain_continues">雨・1時間先まで%1$s</string>
     <string name="rain_dry_hour">1時間先まで雨は降りません</string>
     <string name="rain_stops_then_resumes">雨・%1$d分後にやみ、%2$d分後にまた降ります</string>
+    <string name="radar_loading">レーダーを読み込み中…</string>
+    <string name="radar_unavailable">レーダーを読み込めませんでした。</string>
+    <string name="radar_credit">出典: 気象庁ナウキャスト・地理院タイル</string>
 </resources>

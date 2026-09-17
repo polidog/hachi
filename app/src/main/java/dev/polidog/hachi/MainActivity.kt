@@ -9,13 +9,14 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.graphics.drawable.GradientDrawable
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 
-private const val PAGES = 2
+private const val PAGES = 3
 
 class MainActivity : Activity(), Conversation.Ui {
     private lateinit var settings: Settings
@@ -24,6 +25,7 @@ class MainActivity : Activity(), Conversation.Ui {
     private lateinit var talk: View
     private lateinit var dots: TextView
     private lateinit var weatherPage: WeatherPage
+    private lateinit var radarPage: RadarPage
     private lateinit var weather: WeatherStore
     private var conversation: Conversation? = null
 
@@ -52,6 +54,7 @@ class MainActivity : Activity(), Conversation.Ui {
         }
 
         weatherPage = WeatherPage(this)
+        radarPage = RadarPage(this)
         dots = TextView(this).apply {
             setTextColor(Color.argb(0x8A, 0xFA, 0xF6, 0xEC))
             textSize = 10f
@@ -59,6 +62,7 @@ class MainActivity : Activity(), Conversation.Ui {
         val pager = PagerView(this).apply {
             addPage(ClockView(context))
             addPage(weatherPage)
+            addPage(radarPage)
             onPageChanged = { showDots(it) }
         }
         showDots(0)
@@ -67,6 +71,17 @@ class MainActivity : Activity(), Conversation.Ui {
             FrameLayout(this).apply {
                 addView(SkyView(context))
                 addView(pager)
+                addView(
+                    // The radar page is a pale map; without this the dots, the spend and the
+                    // settings button sit white-on-white.
+                    View(context).apply {
+                        background = GradientDrawable(
+                            GradientDrawable.Orientation.TOP_BOTTOM,
+                            intArrayOf(Color.argb(0x6E, 0x06, 0x0A, 0x14), Color.TRANSPARENT),
+                        )
+                    },
+                    FrameLayout.LayoutParams(FILL, dp(64), Gravity.TOP),
+                )
                 addView(
                     dots,
                     FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
@@ -114,7 +129,8 @@ class MainActivity : Activity(), Conversation.Ui {
         val h = dp(20)
         val v = dp(11)
         setPadding(h, v, h, v)
-        background = pill(dp(24).toFloat(), strokeWidthPx = dp(1))
+        // Opaque enough to read over the radar's map, not just over the sky.
+        background = pill(dp(24).toFloat(), fill = Color.argb(0xB8, 0x0A, 0x0E, 0x1A), strokeWidthPx = dp(1))
         addView(
             ImageView(context).apply {
                 setImageResource(R.drawable.ic_mic)
@@ -151,7 +167,10 @@ class MainActivity : Activity(), Conversation.Ui {
         // Settings may have changed the key or the cap, and the spend line is stale after a session.
         spend.text = Usage(this).label()
         // Also picks up a place that was just chosen in Settings.
-        weather.start { weatherPage.bind(it) }
+        weather.start {
+            weatherPage.bind(it)
+            radarPage.bind(it)
+        }
     }
 
     override fun onPause() {
