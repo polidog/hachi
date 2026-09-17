@@ -4,6 +4,15 @@
     <string name="settings_api_key">Gemini API key</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved">Saved</string>
+    <string name="settings_section_conversation">Conversation</string>
+    <string name="settings_section_spend">Spend</string>
+    <string name="settings_model">Model</string>
+    <string name="settings_voice">Voice</string>
+    <string name="settings_silence">Silence before ending</string>
+    <string name="settings_seconds">%1$d seconds</string>
+    <string name="settings_usage">Used so far</string>
+    <string name="settings_unset">Not set</string>
+    <string name="settings_no_limit">No limit</string>
     <string name="settings_daily_cap">Daily spend cap in USD (0 = no limit)</string>
     <string name="error_daily_cap">Today\'s spend cap of $%1$s has been reached.</string>
     <string name="error_no_api_key">Set a Gemini API key in Settings first.</string>

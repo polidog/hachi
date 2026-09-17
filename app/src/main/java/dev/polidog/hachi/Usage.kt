@@ -74,13 +74,22 @@ class Usage(context: Context) {
     /** USD per 1M tokens. Source: ai.google.dev/gemini-api/docs/pricing, checked 2026-09-17. */
     private class Rates(val input: Map<String, Double>, val output: Map<String, Double>) {
         companion object {
-            private val LIVE_3_8 = Rates(
+            /** gemini-3.x live, including the extended-thinking variant: all priced alike. */
+            private val LIVE_3_X = Rates(
                 input = mapOf("TEXT" to 0.75, "AUDIO" to 3.00, "IMAGE" to 1.00, "VIDEO" to 1.00),
                 output = mapOf("TEXT" to 4.50, "AUDIO" to 12.00, "IMAGE" to 0.0, "VIDEO" to 0.0),
             )
 
-            /** Every Live model is priced from this table for now; revisit when a second one is used. */
-            fun forModel(model: String): Rates = LIVE_3_8
+            /** gemini-2.5-flash-native-audio: same audio rates, cheaper text. */
+            private val NATIVE_AUDIO_2_5 = Rates(
+                input = mapOf("TEXT" to 0.50, "AUDIO" to 3.00, "IMAGE" to 1.00, "VIDEO" to 1.00),
+                output = mapOf("TEXT" to 2.00, "AUDIO" to 12.00, "IMAGE" to 0.0, "VIDEO" to 0.0),
+            )
+
+            /** An unrecognised model is priced as 3.x live, the dearer of the two, so the estimate
+             * does not quietly run low on a model whose rates are not in here yet. */
+            fun forModel(model: String): Rates =
+                if (model.contains("native-audio")) NATIVE_AUDIO_2_5 else LIVE_3_X
         }
     }
 }

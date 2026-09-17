@@ -86,9 +86,16 @@ class MicStream(private val onChunk: (ByteArray) -> Unit) {
  */
 class SpeakerStream {
     private var track: AudioTrack? = null
-    /** Frames handed to the track since the last flush; compared against the playback head. */
-    @Volatile private var written = 0L
-    @Volatile private var quietSince = 0L
+
+    /**
+     * Wall-clock time at which everything handed to the track will have finished playing.
+     *
+     * This deliberately does not consult AudioTrack.playbackHeadPosition: flush() does not reliably
+     * reset it, which left the written-frames comparison stuck reporting "not playing" for the rest
+     * of the session -- the microphone then stayed open through every reply and the model answered
+     * its own voice.
+     */
+    @Volatile private var playUntil = 0L
 
     fun start() {
         if (track != null) return
@@ -119,37 +126,33 @@ class SpeakerStream {
     fun write(pcm: ByteArray) {
         val t = track ?: return
         t.write(pcm, 0, pcm.size)
-        written += pcm.size / 2 // PCM16 mono: 2 bytes per frame
+        val durationMs = pcm.size / 2 * 1000L / SPEAKER_RATE // PCM16 mono: 2 bytes per frame
+        // Chunks arrive faster than real time, so each one extends the end of whatever is already
+        // queued; a chunk arriving after a gap starts from now instead.
+        playUntil = maxOf(playUntil, System.currentTimeMillis()) + durationMs
     }
 
     /**
-     * True while audio is still playing, and for [tailMs] afterwards -- the room keeps ringing for a
-     * moment after the speaker goes quiet, and that tail is enough to wake the far-end VAD.
+     * True while audio is still playing, and for [tailMs] afterwards.
+     *
+     * The tail covers two things at once: the room keeps ringing for a moment after the speaker goes
+     * quiet, and the track's own buffer means audio actually reaches the speaker slightly later than
+     * it was written. ponytail: 600 ms is a guess tuned by ear -- raise it if a tail of the reply
+     * still leaks back in.
      */
-    fun busy(tailMs: Long = 400): Boolean {
-        val t = track ?: return false
-        val playing = written > t.playbackHeadPosition.toLong()
-        if (playing) {
-            quietSince = 0L
-            return true
-        }
-        if (quietSince == 0L) quietSince = System.currentTimeMillis()
-        return System.currentTimeMillis() - quietSince < tailMs
-    }
+    fun busy(tailMs: Long = 600): Boolean =
+        track != null && System.currentTimeMillis() < playUntil + tailMs
 
     /** Drops whatever is still queued, so an interrupted reply stops speaking immediately. */
     fun flush() {
-        // AudioTrack.flush() resets the playback head, so the written-frame count has to reset with it.
         track?.runCatching { pause(); flush(); play() }
-        written = 0L
-        quietSince = 0L
+        playUntil = 0L
     }
 
     fun stop() {
         track?.runCatching { pause(); flush(); stop(); release() }
         track = null
-        written = 0L
-        quietSince = 0L
+        playUntil = 0L
     }
 }
 

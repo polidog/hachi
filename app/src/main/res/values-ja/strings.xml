@@ -4,6 +4,15 @@
     <string name="settings_api_key">Gemini API キー</string>
     <string name="settings_save">保存</string>
     <string name="settings_saved">保存しました</string>
+    <string name="settings_section_conversation">会話</string>
+    <string name="settings_section_spend">料金</string>
+    <string name="settings_model">モデル</string>
+    <string name="settings_voice">声</string>
+    <string name="settings_silence">会話を終える無音の長さ</string>
+    <string name="settings_seconds">%1$d 秒</string>
+    <string name="settings_usage">これまでの使用額</string>
+    <string name="settings_unset">未設定</string>
+    <string name="settings_no_limit">無制限</string>
     <string name="settings_daily_cap">1日の上限（USD、0 で無制限）</string>
     <string name="error_daily_cap">本日の上限 $%1$s に達しました。</string>
     <string name="error_no_api_key">先に設定で Gemini API キーを入力してください。</string>

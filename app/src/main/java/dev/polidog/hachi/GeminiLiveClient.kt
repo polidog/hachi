@@ -52,6 +52,9 @@ class GeminiLiveClient(
         .build()
     private var socket: WebSocket? = null
     @Volatile private var ready = false
+    /** The reply's audio format is logged once per session: a model that streams at something other
+     * than 24 kHz would play back at the wrong speed and throw off the speaker's busy estimate. */
+    private var loggedFormat = false
 
     fun connect() {
         val request = Request.Builder().url("$ENDPOINT?key=$apiKey").build()
@@ -169,8 +172,15 @@ class GeminiLiveClient(
                 for (i in 0 until parts.length()) {
                     val part = parts.optJSONObject(i) ?: continue
                     part.optString("text").takeIf { it.isNotEmpty() }?.let(listener::onAssistantText)
-                    val data = part.optJSONObject("inlineData")?.optString("data")
-                    if (!data.isNullOrEmpty()) listener.onAudio(Base64.decode(data, Base64.NO_WRAP))
+                    val inline = part.optJSONObject("inlineData")
+                    val data = inline?.optString("data")
+                    if (!data.isNullOrEmpty()) {
+                        if (!loggedFormat) {
+                            loggedFormat = true
+                            Log.i(TAG, "reply audio format: ${inline.optString("mimeType")}")
+                        }
+                        listener.onAudio(Base64.decode(data, Base64.NO_WRAP))
+                    }
                 }
             }
             if (content.optBoolean("turnComplete")) listener.onTurnComplete()
