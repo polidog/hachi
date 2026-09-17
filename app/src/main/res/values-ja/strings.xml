@@ -57,4 +57,10 @@
     <string name="settings_no_results">見つかりませんでした</string>
     <string name="settings_yahoo_appid">Yahoo! JAPAN アプリケーション ID</string>
     <string name="settings_yahoo_appid_help">雨雲レーダーを有効にします。1時間先までの雨を10分刻みで見られます。日本国内のみ。空欄ならこの機能なしで動きます。</string>
+    <string name="weather_today">今日</string>
+    <string name="weather_tomorrow">明日</string>
+    <string name="weather_no_place">設定で地域を選ぶと天気が出ます。</string>
+    <string name="weather_unavailable">天気を取得できませんでした。</string>
+    <string name="rain_now">今</string>
+    <string name="rain_minutes">%1$d分後</string>
 </resources>

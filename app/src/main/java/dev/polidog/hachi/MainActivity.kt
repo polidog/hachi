@@ -15,11 +15,16 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 
+private const val PAGES = 2
+
 class MainActivity : Activity(), Conversation.Ui {
     private lateinit var settings: Settings
     private lateinit var captions: ConversationView
     private lateinit var spend: TextView
     private lateinit var talk: View
+    private lateinit var dots: TextView
+    private lateinit var weatherPage: WeatherPage
+    private lateinit var weather: WeatherStore
     private var conversation: Conversation? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +39,7 @@ class MainActivity : Activity(), Conversation.Ui {
                 View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
 
+        weather = WeatherStore(this, settings)
         captions = ConversationView(this).apply {
             onHush = { conversation?.hush() }
             onEnd = { conversation?.stop() }
@@ -45,9 +51,27 @@ class MainActivity : Activity(), Conversation.Ui {
             text = Usage(this@MainActivity).label()
         }
 
+        weatherPage = WeatherPage(this)
+        dots = TextView(this).apply {
+            setTextColor(Color.argb(0x8A, 0xFA, 0xF6, 0xEC))
+            textSize = 10f
+        }
+        val pager = PagerView(this).apply {
+            addPage(ClockView(context))
+            addPage(weatherPage)
+            onPageChanged = { showDots(it) }
+        }
+        showDots(0)
+
         setContentView(
             FrameLayout(this).apply {
-                addView(ClockView(context))
+                addView(SkyView(context))
+                addView(pager)
+                addView(
+                    dots,
+                    FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+                        .apply { topMargin = dp(10) },
+                )
                 addView(
                     spend,
                     FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START)
@@ -66,6 +90,11 @@ class MainActivity : Activity(), Conversation.Ui {
                 addView(captions)
             }
         )
+    }
+
+    /** Page indicator, filled for the current page. */
+    private fun showDots(current: Int) {
+        dots.text = (0 until PAGES).joinToString(" ") { if (it == current) "●" else "○" }
     }
 
     private fun settingsButton() = ImageView(this).apply {
@@ -120,11 +149,14 @@ class MainActivity : Activity(), Conversation.Ui {
         super.onResume()
         // Settings may have changed the key or the cap, and the spend line is stale after a session.
         spend.text = Usage(this).label()
+        // Also picks up a place that was just chosen in Settings.
+        weather.start { weatherPage.bind(it) }
     }
 
     override fun onPause() {
         super.onPause()
         conversation?.stop()
+        weather.stop()
     }
 
     override fun onState(state: Conversation.State) {

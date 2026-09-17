@@ -3,6 +3,11 @@ package dev.polidog.hachi
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.view.ViewGroup
+
+/** Kotlin will not resolve these inherited Java constants unqualified, and -1/-2 read as nothing. */
+const val FILL = ViewGroup.LayoutParams.MATCH_PARENT
+const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 
 fun Context.dp(value: Int) = (value * resources.displayMetrics.density).toInt()
 

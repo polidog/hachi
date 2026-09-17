@@ -57,4 +57,10 @@
     <string name="settings_no_results">Nothing found</string>
     <string name="settings_yahoo_appid">Yahoo! Japan app id</string>
     <string name="settings_yahoo_appid_help">Enables the rain radar: whether it is about to rain within the hour, minute by minute. Japan only. Leave blank to go without it.</string>
+    <string name="weather_today">Today</string>
+    <string name="weather_tomorrow">Tomorrow</string>
+    <string name="weather_no_place">Choose a place in Settings to see the weather.</string>
+    <string name="weather_unavailable">Could not fetch the weather.</string>
+    <string name="rain_now">now</string>
+    <string name="rain_minutes">+%1$d min</string>
 </resources>
