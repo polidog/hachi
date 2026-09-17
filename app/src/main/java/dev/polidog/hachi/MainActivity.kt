@@ -26,6 +26,7 @@ class MainActivity : Activity(), Conversation.Ui {
     private lateinit var dots: TextView
     private lateinit var weatherPage: WeatherPage
     private lateinit var radarPage: RadarPage
+    private lateinit var sky: SkyView
     private lateinit var weather: WeatherStore
     private var conversation: Conversation? = null
 
@@ -55,6 +56,7 @@ class MainActivity : Activity(), Conversation.Ui {
 
         weatherPage = WeatherPage(this)
         radarPage = RadarPage(this)
+        sky = SkyView(this)
         dots = TextView(this).apply {
             setTextColor(Color.argb(0x8A, 0xFA, 0xF6, 0xEC))
             textSize = 10f
@@ -69,7 +71,7 @@ class MainActivity : Activity(), Conversation.Ui {
 
         setContentView(
             FrameLayout(this).apply {
-                addView(SkyView(context))
+                addView(sky)
                 addView(pager)
                 addView(
                     // The radar page is a pale map; without this the dots, the spend and the
@@ -106,6 +108,13 @@ class MainActivity : Activity(), Conversation.Ui {
                 addView(captions)
             }
         )
+    }
+
+    /** Debug builds only: `-e name debugScene -e value THUNDER` pins the sky to one scene. */
+    private fun debugScene(): SkyScene? {
+        if (!BuildConfig.DEBUG) return null
+        val name = settings.get("debugScene").trim()
+        return SkyScene.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
     }
 
     /** Page indicator, filled for the current page. */
@@ -170,6 +179,7 @@ class MainActivity : Activity(), Conversation.Ui {
         weather.start {
             weatherPage.bind(it)
             radarPage.bind(it)
+            sky.bind(it.forecast, debugScene())
         }
     }
 
