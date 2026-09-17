@@ -148,6 +148,27 @@ class SettingsActivity : Activity() {
                 ) { host.settings.set("silenceTimeout", it.trim().ifBlank { "30" }) }
             },
         ),
+        getString(R.string.settings_section_weather) to Item(
+            title = getString(R.string.settings_place),
+            summary = { settings.weatherPlace?.name ?: getString(R.string.settings_unset) },
+            detail = { host, pane -> host.placePane(pane) },
+        ),
+        null to Item(
+            title = getString(R.string.settings_yahoo_appid),
+            summary = {
+                val id = settings.yahooAppId
+                if (id.isBlank()) getString(R.string.settings_unset) else "••••" + id.takeLast(4)
+            },
+            detail = { host, pane ->
+                host.textPane(
+                    pane,
+                    getString(R.string.settings_yahoo_appid),
+                    getString(R.string.settings_yahoo_appid_help),
+                    host.settings.yahooAppId,
+                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+                ) { host.settings.setSecret("yahooAppId", it.trim()) }
+            },
+        ),
         getString(R.string.settings_section_spend) to Item(
             title = getString(R.string.settings_daily_cap),
             summary = {
@@ -301,6 +322,71 @@ class SettingsActivity : Activity() {
             },
             LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(10); gravity = Gravity.END },
         )
+    }
+
+    /** Place search: type a name, pick one of the hits, and its coordinates are what gets stored. */
+    private fun placePane(pane: LinearLayout) {
+        pane.addView(paneTitle(getString(R.string.settings_place)))
+        pane.addView(paneHelp(getString(R.string.settings_place_help)))
+
+        val current = TextView(this).apply {
+            text = settings.weatherPlace?.name ?: getString(R.string.settings_unset)
+            textSize = 16f
+            setTextColor(CREAM)
+            setPadding(0, dp(4), 0, dp(10))
+        }
+        pane.addView(current)
+
+        val field = EditText(this).apply {
+            hint = getString(R.string.settings_place_hint)
+            inputType = InputType.TYPE_CLASS_TEXT
+            textSize = 15f
+            setTextColor(CREAM)
+        }
+        pane.addView(field, LinearLayout.LayoutParams(-1, -2))
+
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        pane.addView(
+            Button(this).apply {
+                text = getString(R.string.settings_search)
+                setOnClickListener {
+                    val query = field.text.toString().trim()
+                    if (query.isBlank()) return@setOnClickListener
+                    results.removeAllViews()
+                    results.addView(resultLine(getString(R.string.settings_searching), null))
+                    val language = if (java.util.Locale.getDefault().language == "ja") "ja" else "en"
+                    thread {
+                        val found = Weather.search(query, language)
+                        main.post {
+                            results.removeAllViews()
+                            if (found.isEmpty()) {
+                                results.addView(resultLine(getString(R.string.settings_no_results), null))
+                            }
+                            for (place in found) {
+                                results.addView(
+                                    resultLine(place.name) {
+                                        settings.setWeatherPlace(place)
+                                        current.text = place.name
+                                        drawList() // the summary in the left-hand list just changed
+                                        Toast.makeText(this@SettingsActivity, R.string.settings_saved, Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8); gravity = Gravity.END },
+        )
+        pane.addView(results, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+    }
+
+    private fun resultLine(text: String, onClick: (() -> Unit)?) = TextView(this).apply {
+        this.text = text
+        textSize = 14f
+        setTextColor(if (onClick == null) CREAM_60 else CREAM)
+        setPadding(0, dp(9), 0, dp(9))
+        if (onClick != null) setOnClickListener { onClick() }
     }
 
     private fun paneTitle(text: String) = TextView(this).apply {

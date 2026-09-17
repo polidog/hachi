@@ -5,7 +5,9 @@ import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import dev.polidog.hachi.tools.ToolRegistry
 import org.json.JSONObject
+import kotlin.concurrent.thread
 import java.util.Locale
 
 /**
@@ -32,6 +34,7 @@ class Conversation(
     private val audioMode = AudioMode(context.getSystemService(Context.AUDIO_SERVICE) as AudioManager)
     private val speaker = SpeakerStream()
     private val usage = Usage(context)
+    private val tools = ToolRegistry(context, settings)
     // Half-duplex gate: nothing is sent upstream while the assistant's own voice is coming out of
     // the speaker. The device has no hardware echo canceller, so without this the model hears itself,
     // transcribes it as the user, and answers its own reply.
@@ -74,7 +77,7 @@ class Conversation(
             voice = settings.voice,
             languageCode = languageCode(),
             systemInstruction = systemInstruction(),
-            tools = emptyList(),
+            tools = tools.declarations,
             listener = object : GeminiLiveClient.Listener {
                 override fun onReady() { main.post {
                     mic.start()
@@ -103,9 +106,12 @@ class Conversation(
                 override fun onTurnComplete() { main.post { restartSilenceTimer() } }
 
                 override fun onToolCall(id: String, name: String, args: JSONObject) {
-                    // Phase 3 wires the tool registry in here.
-                    Log.i(TAG, "unhandled tool call: $name $args")
-                    client?.sendToolResult(id, name, JSONObject().put("error", "not_implemented"))
+                    Log.i(TAG, "tool call: $name $args")
+                    // Tools do network I/O, and this arrives on the socket's reader thread.
+                    thread {
+                        val result = tools.run(name, args)
+                        client?.sendToolResult(id, name, result)
+                    }
                 }
 
                 override fun onUsage(metadata: JSONObject) { main.post {

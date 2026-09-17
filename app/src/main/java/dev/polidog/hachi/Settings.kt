@@ -26,6 +26,28 @@ class Settings(context: Context) {
     val geminiKey get() = secret("geminiKey")
     val model get() = get("model", DEFAULT_MODEL)
     val voice get() = get("voice", DEFAULT_VOICE)
+    /** Where the weather is fetched for; null until one has been chosen. */
+    val weatherPlace: Place?
+        get() {
+            val name = get("weatherPlace")
+            val latitude = get("weatherLat").toDoubleOrNull()
+            val longitude = get("weatherLon").toDoubleOrNull()
+            return if (name.isNotBlank() && latitude != null && longitude != null) {
+                Place(name, latitude, longitude)
+            } else {
+                null
+            }
+        }
+
+    fun setWeatherPlace(place: Place) {
+        set("weatherPlace", place.name)
+        set("weatherLat", place.latitude.toString())
+        set("weatherLon", place.longitude.toString())
+    }
+
+    /** Yahoo! Japan application id for the rain radar; blank simply disables that half. */
+    val yahooAppId get() = secret("yahooAppId")
+
     /** Dollars of Gemini spend allowed per day; 0 means no limit. */
     val dailyCapUsd get() = get("dailyCap", DEFAULT_DAILY_CAP).toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
 
