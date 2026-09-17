@@ -7,12 +7,16 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import android.graphics.Color
+import android.view.Gravity
 import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 
 class MainActivity : Activity(), Conversation.Ui {
     private lateinit var settings: Settings
     private lateinit var captions: ConversationView
+    private lateinit var spend: TextView
     private var conversation: Conversation? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,8 +32,17 @@ class MainActivity : Activity(), Conversation.Ui {
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
 
         captions = ConversationView(this)
+        spend = TextView(this).apply {
+            setTextColor(Color.argb(0x66, 0xFF, 0xFF, 0xFF))
+            textSize = 11f
+            gravity = Gravity.BOTTOM or Gravity.END
+            val pad = (resources.displayMetrics.density * 8).toInt()
+            setPadding(pad, pad, pad, pad)
+            text = Usage(this@MainActivity).monthLabel()
+        }
         val root = FrameLayout(this).apply {
             addView(ClockView(context))
+            addView(spend)
             addView(captions)
             setOnClickListener { toggleConversation() }
             setOnLongClickListener {
@@ -69,6 +82,8 @@ class MainActivity : Activity(), Conversation.Ui {
             Conversation.State.ENDED -> captions.hide()
         }
     }
+
+    override fun onSpend(label: String) { spend.text = label }
 
     override fun onUserText(text: String) = captions.appendUser(text)
 

@@ -40,6 +40,8 @@ class GeminiLiveClient(
         fun onInterrupted()
         fun onTurnComplete()
         fun onToolCall(id: String, name: String, args: JSONObject)
+        /** The session's running token counts, which is what the spend display is built from. */
+        fun onUsage(metadata: JSONObject)
         fun onClosed(reason: String?)
     }
 
@@ -182,6 +184,11 @@ class GeminiLiveClient(
                     call.optJSONObject("args") ?: JSONObject(),
                 )
             }
+        }
+        message.optJSONObject("usageMetadata")?.let {
+            // Logged raw so the cumulative-vs-delta assumption in Usage can be checked on the device.
+            Log.i(TAG, "usage: $it")
+            listener.onUsage(it)
         }
         message.optJSONObject("goAway")?.let {
             // The server is about to drop the session (it caps how long one can run).

@@ -19,6 +19,8 @@ class Conversation(
 ) {
     interface Ui {
         fun onState(state: State)
+        /** Spend so far this calendar month, already formatted. */
+        fun onSpend(label: String)
         fun onUserText(text: String)
         fun onAssistantText(text: String)
         fun onError(message: String)
@@ -29,6 +31,7 @@ class Conversation(
     private val main = Handler(Looper.getMainLooper())
     private val audioMode = AudioMode(context.getSystemService(Context.AUDIO_SERVICE) as AudioManager)
     private val speaker = SpeakerStream()
+    private val usage = Usage(context)
     // Half-duplex gate: nothing is sent upstream while the assistant's own voice is coming out of
     // the speaker. The device has no hardware echo canceller, so without this the model hears itself,
     // transcribes it as the user, and answers its own reply.
@@ -100,6 +103,11 @@ class Conversation(
                     client?.sendToolResult(id, name, JSONObject().put("error", "not_implemented"))
                 }
 
+                override fun onUsage(metadata: JSONObject) { main.post {
+                    usage.observe(settings.model, metadata)
+                    ui.onSpend(usage.monthLabel())
+                } }
+
                 override fun onClosed(reason: String?) { main.post {
                     if (!stopped) reason?.let { ui.onError(it) }
                     stop()
@@ -117,6 +125,7 @@ class Conversation(
         audioMode.leave()
         client?.close()
         client = null
+        usage.endSession()
         ui.onState(State.ENDED)
     }
 
