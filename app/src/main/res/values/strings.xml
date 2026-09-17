@@ -20,6 +20,8 @@
     <string name="state_listening">Listening…</string>
     <string name="speaker_user">You</string>
     <string name="speaker_assistant">Hachi</string>
-    <string name="tap_to_talk">Tap to talk · long-press for settings</string>
+    <string name="action_talk">Talk</string>
+    <string name="action_end">End</string>
+    <string name="hint_tap_to_hush">Tap the screen to stop it talking</string>
     <string name="system_instruction">You are Hachi, a voice assistant living on a small display in the user\'s home. Speak naturally and keep answers to a sentence or two unless more detail is asked for. Reply in the language the user speaks.</string>
 </resources>
