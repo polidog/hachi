@@ -169,6 +169,35 @@ class SettingsActivity : Activity() {
                 ) { host.settings.setSecret("yahooAppId", it.trim()) }
             },
         ),
+        getString(R.string.settings_section_house) to Item(
+            title = getString(R.string.settings_ha_url),
+            summary = { settings.homeAssistantUrl.ifBlank { getString(R.string.settings_unset) } },
+            detail = { host, pane ->
+                host.textPane(
+                    pane,
+                    getString(R.string.settings_ha_url),
+                    getString(R.string.settings_ha_url_help),
+                    host.settings.homeAssistantUrl,
+                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
+                ) { host.settings.set("homeAssistantUrl", it.trim()) }
+            },
+        ),
+        null to Item(
+            title = getString(R.string.settings_ha_token),
+            summary = {
+                val token = settings.homeAssistantToken
+                if (token.isBlank()) getString(R.string.settings_unset) else "\u2022\u2022\u2022\u2022" + token.takeLast(4)
+            },
+            detail = { host, pane ->
+                host.textPane(
+                    pane,
+                    getString(R.string.settings_ha_token),
+                    getString(R.string.settings_ha_token_help),
+                    host.settings.homeAssistantToken,
+                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+                ) { host.settings.setSecret("homeAssistantToken", it.trim()) }
+            },
+        ),
         getString(R.string.settings_section_spend) to Item(
             title = getString(R.string.settings_daily_cap),
             summary = {

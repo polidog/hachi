@@ -4,12 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>実装計画</title>
-<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+<link rel="stylesheet" href="doc.css" />
 <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
 </head>
-<body class="bg-slate-50 dark:bg-slate-900">
-  <main class="mx-auto max-w-4xl px-6 py-10">
-    <article id="doc" class="prose prose-slate dark:prose-invert max-w-none"></article>
+<body>
+  <main>
+    <article id="doc"></article>
   </main>
   <!-- 正規データ（機械可読）: 本文の Markdown ソース。編集はこのブロックを更新する -->
   <script type="text/markdown" id="doc-source">
@@ -27,7 +27,7 @@
 | 2 | Gemini Live 会話・料金計上・設定画面 | 完了 |
 | 3 | 道具のうち 時刻 (`GetCurrentTimeTool`) と 天気 (`GetWeatherTool`) | 完了 |
 | 4 | ページャと 3 ページ（時計・天気・雨レーダー） | 完了 |
-| 3 | 残り: Home Assistant の MCP クライアント | **次にやる** |
+| 3 | 残り: Home Assistant の MCP クライアント | コードは完了（手順 2〜6）。**実機と実サーバでの確認（手順 1・7）が残り** |
 | 4 | 残り: スマートホームページ・音楽ページ | 未着手 |
 | 1 | ウェイクワード常時待受と Foreground Service への移行 | 未着手 |
 | 5 | Immich フォトフレーム | 未着手 |
@@ -46,11 +46,11 @@
 | # | やること | 触るもの | 前提 | 終わりの判定 |
 |---|---------|---------|------|------------|
 | 1 | HA の MCP サーバに疎通確認 | （手元から curl） | HA の Long-Lived Token | ツール名と `inputSchema` が返り、`HassMediaSearchAndPlay` がある |
-| 2 | 設定に HA の URL とトークンを足す | `Settings.kt` / `SettingsActivity.kt` | 1 | 設定画面で入れて保存でき、再起動後も残る（トークンは `setSecret`） |
-| 3 | MCP クライアントを書く | `tools/McpServer.kt` / `McpServerTest.kt` | 2 | `tools/list` の実レスポンスから宣言が作れる（JVM テスト） |
-| 4 | レジストリに合流させる | `tools/ToolRegistry.kt` | 3 | 会話を始めると家の道具が `declarations` に載る（`adb logcat -s Hachi`） |
-| 5 | 道具一覧をキャッシュする | `Settings.kt` / `ToolRegistry.kt` | 4 | HA が落ちていても前回の道具で会話が始まる |
-| 6 | 危ない操作は口頭確認させる | `Conversation.systemInstruction()` | 4 | 「鍵開けて」で一度聞き返してくる |
+| 2 | 設定に HA の URL とトークンを足す | `Settings.kt` / `SettingsActivity.kt` | 1 | ✅ 設定画面「家」に URL とトークン。トークンは `setSecret` |
+| 3 | MCP クライアントを書く | `tools/McpServer.kt` / `McpServerTest.kt` | 2 | ✅ `tools/list` → 宣言、`tools/call` → 結果（JVM テスト 10 本）。**ただし貼ってある JSON は手書きで、手順 1 の実レスポンスに差し替える** |
+| 4 | レジストリに合流させる | `tools/ToolRegistry.kt` | 3 | ✅ `ToolRegistry` が道具名を `Hachi` タグに出す |
+| 5 | 道具一覧をキャッシュする | `Settings.kt` / `ToolRegistry.kt` | 4 | ✅ `MainActivity.onResume()` が裏で取り、`houseTools` に保存。取れなければ前回のまま |
+| 6 | 危ない操作は口頭確認させる | `system_instruction`（`strings.xml`） | 4 | ✅ 鍵・扉・門扉・警報だけ聞き返す。照明や音楽は確認しない |
 | 7 | 実機で通す | — | 4〜6 | 「電気つけて」で点き、曲名を言うと鳴る |
 | 8 | スマートホームページ | `SmartHomePage.kt` / `MainActivity.kt` | 7 | 機器の一覧が出て、会話で操作すると表示が追従する |
 | 9 | 音楽ページ | `MusicPage.kt` / `MainActivity.kt` | 7 | 再生中の曲が出て、再生・停止・次が触れる |
@@ -63,6 +63,8 @@
 Home Assistant の MCP サーバ（`/api/mcp`、Streamable HTTP、Bearer トークン）に `tools/list` で聞いた道具をそのまま Gemini に渡し、呼ばれたら `tools/call` に流す。設計と、自前で書かない理由は `architecture.html` の「tools/ の規約」にある。
 
 JSON-RPC は OkHttp への POST 2 種類で足りる。テストを書くのは**レスポンスの解釈だけ**（`tools/list` の JSON → 宣言、`tools/call` の結果 → モデルに返す JSON）。通信そのものは叩いて確かめる — `test-architecture.html` の方針どおり。
+
+**手順 1 と 7 だけが残っている。** どちらも実物（HA の Long-Lived Token と端末）が要る。エンドポイントの既定パス `/api/mcp` は未確認のままなので、違っていた場合は設定の「Home Assistant のアドレス」に完全な URL を入れれば足りる（`mcpEndpoint()` が末尾にパスが無いときだけ既定を足す）。
 
 手順 5 のキャッシュが要るのは、`Conversation.start()` がメインスレッドで、その場で `tools/list` を待てないため。バックグラウンドで取って保存し、次の会話から反映する。初回だけ家の道具が無い状態で始まる。
 
@@ -94,9 +96,6 @@ Immich の API から写真を取って一定間隔で切り替える。1 ペー
 - **Google フォト。** 理由は `architecture.html` の末尾
 - **CI。** 端末 1 台の個人プロジェクトでは、実機で動かすほうが速い
   </script>
-  <script>
-    document.getElementById('doc').innerHTML =
-      marked.parse(document.getElementById('doc-source').textContent.trim());
-  </script>
+  <script src="doc.js"></script>
 </body>
 </html>

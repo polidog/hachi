@@ -15,6 +15,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import dev.polidog.hachi.tools.refreshHouseTools
+import kotlin.concurrent.thread
 
 private const val PAGES = 3
 
@@ -175,6 +177,9 @@ class MainActivity : Activity(), Conversation.Ui {
         super.onResume()
         // Settings may have changed the key or the cap, and the spend line is stale after a session.
         spend.text = Usage(this).label()
+        // What the house can do is asked for here and used by the next conversation, not this one:
+        // starting a session cannot wait for the network.
+        thread { refreshHouseTools(settings) }
         // Also picks up a place that was just chosen in Settings.
         weather.start {
             weatherPage.bind(it)

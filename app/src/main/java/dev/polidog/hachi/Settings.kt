@@ -48,6 +48,20 @@ class Settings(context: Context) {
     /** Yahoo! Japan application id for the rain radar; blank simply disables that half. */
     val yahooAppId get() = secret("yahooAppId")
 
+    /** Where Home Assistant lives, and the long-lived token to talk to it with. */
+    val homeAssistantUrl get() = get("homeAssistantUrl")
+    val homeAssistantToken get() = secret("homeAssistantToken")
+
+    /**
+     * The house's tool list as it was last fetched, as the raw `tools` array.
+     *
+     * A conversation starts on the main thread and cannot wait for the network, so the tools offered
+     * are the ones from last time. Only the very first conversation after setup goes without them.
+     */
+    var houseTools: String
+        get() = get("houseTools")
+        set(value) = set("houseTools", value)
+
     /** Dollars of Gemini spend allowed per day; 0 means no limit. */
     val dailyCapUsd get() = get("dailyCap", DEFAULT_DAILY_CAP).toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
 
