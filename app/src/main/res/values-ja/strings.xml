@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">ハチ</string>
+    <string name="settings_title">設定</string>
+    <string name="settings_api_key">Gemini API キー</string>
+    <string name="settings_save">保存</string>
+    <string name="settings_saved">保存しました</string>
+    <string name="error_no_api_key">先に設定で Gemini API キーを入力してください。</string>
+    <string name="state_connecting">接続中…</string>
+    <string name="state_listening">どうぞ</string>
+    <string name="speaker_user">あなた</string>
+    <string name="speaker_assistant">ハチ</string>
+    <string name="tap_to_talk">タップで話しかける・長押しで設定</string>
+    <string name="system_instruction">あなたは家の小さなディスプレイに住む音声アシスタント「ハチ」です。自然な話し言葉で、聞かれたこと以上に長くならないよう一〜二文で答えてください。相手が話した言語で返答します。</string>
+</resources>
