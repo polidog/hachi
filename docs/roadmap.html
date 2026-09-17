@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>実装計画</title>
+<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900">
+  <main class="mx-auto max-w-4xl px-6 py-10">
+    <article id="doc" class="prose prose-slate dark:prose-invert max-w-none"></article>
+  </main>
+  <!-- 正規データ（機械可読）: 本文の Markdown ソース。編集はこのブロックを更新する -->
+  <script type="text/markdown" id="doc-source">
+# 実装計画
+
+> 最終更新: 2026-09-17
+
+どこまで出来ていて、次に何をどの順でやるか。Phase 番号は `architecture.html` のものをそのまま使うが、**着手順は番号順ではない**。
+
+## 現在地
+
+| Phase | 内容 | 状態 |
+|-------|------|------|
+| 0 | 骨組みと時計（`ClockView` / `DayPalette` / `SkyView`） | 完了 |
+| 2 | Gemini Live 会話・料金計上・設定画面 | 完了 |
+| 3 | 道具のうち 時刻 (`GetCurrentTimeTool`) と 天気 (`GetWeatherTool`) | 完了 |
+| 4 | ページャと 3 ページ（時計・天気・雨レーダー） | 完了 |
+| 3 | 残り: Home Assistant の MCP クライアント | **次にやる** |
+| 4 | 残り: スマートホームページ・音楽ページ | 未着手 |
+| 1 | ウェイクワード常時待受と Foreground Service への移行 | 未着手 |
+| 5 | Immich フォトフレーム | 未着手 |
+
+## 着手順とその理由
+
+**MCP → 残りのページ → ウェイクワード → Immich** の順で進める。
+
+- **MCP が先。** この端末に一番欲しい「機器と音楽を声で動かす」に直接届くのはここだけで、しかも他のどれにも依存しない
+- **ページはその次。** スマートホームページと音楽ページは、MCP が返す機器の状態が無いと中に出すものが無い。MCP より前には書けない
+- **ウェイクワードは後ろ。** 一番大きな構造変更（会話を Foreground Service へ移す）だが、得られるのは「タップの代わりに声で始まる」だけ。後回しにしてもコストは増えない。`Conversation.Ui` の境界が残る限り、道具や画面が増えても移行の手間は変わらないため
+- **Immich が最後。** 無くても壁掛けとして成立している
+
+## 手順
+
+| # | やること | 触るもの | 前提 | 終わりの判定 |
+|---|---------|---------|------|------------|
+| 1 | HA の MCP サーバに疎通確認 | （手元から curl） | HA の Long-Lived Token | ツール名と `inputSchema` が返り、`HassMediaSearchAndPlay` がある |
+| 2 | 設定に HA の URL とトークンを足す | `Settings.kt` / `SettingsActivity.kt` | 1 | 設定画面で入れて保存でき、再起動後も残る（トークンは `setSecret`） |
+| 3 | MCP クライアントを書く | `tools/McpServer.kt` / `McpServerTest.kt` | 2 | `tools/list` の実レスポンスから宣言が作れる（JVM テスト） |
+| 4 | レジストリに合流させる | `tools/ToolRegistry.kt` | 3 | 会話を始めると家の道具が `declarations` に載る（`adb logcat -s Hachi`） |
+| 5 | 道具一覧をキャッシュする | `Settings.kt` / `ToolRegistry.kt` | 4 | HA が落ちていても前回の道具で会話が始まる |
+| 6 | 危ない操作は口頭確認させる | `Conversation.systemInstruction()` | 4 | 「鍵開けて」で一度聞き返してくる |
+| 7 | 実機で通す | — | 4〜6 | 「電気つけて」で点き、曲名を言うと鳴る |
+| 8 | スマートホームページ | `SmartHomePage.kt` / `MainActivity.kt` | 7 | 機器の一覧が出て、会話で操作すると表示が追従する |
+| 9 | 音楽ページ | `MusicPage.kt` / `MainActivity.kt` | 7 | 再生中の曲が出て、再生・停止・次が触れる |
+| 10 | 会話を Foreground Service へ移す | 新 `AssistantService.kt` / `Conversation.kt` / `MainActivity.kt` | なし | 画面を消しても会話が続く |
+| 11 | ウェイクワード常時待受 | butler の Julius 成果物を流用 + `androidTest` | 10 | 「はち」で会話が始まり、誤検出が一晩で数回以内 |
+| 12 | Immich フォトフレーム | `Immich.kt` / `PhotoPage.kt` | なし | 一定間隔で写真が切り替わり、失敗しても他のページは無事 |
+
+## Phase 3 の残り（手順 1〜7）
+
+Home Assistant の MCP サーバ（`/api/mcp`、Streamable HTTP、Bearer トークン）に `tools/list` で聞いた道具をそのまま Gemini に渡し、呼ばれたら `tools/call` に流す。設計と、自前で書かない理由は `architecture.html` の「tools/ の規約」にある。
+
+JSON-RPC は OkHttp への POST 2 種類で足りる。テストを書くのは**レスポンスの解釈だけ**（`tools/list` の JSON → 宣言、`tools/call` の結果 → モデルに返す JSON）。通信そのものは叩いて確かめる — `test-architecture.html` の方針どおり。
+
+手順 5 のキャッシュが要るのは、`Conversation.start()` がメインスレッドで、その場で `tools/list` を待てないため。バックグラウンドで取って保存し、次の会話から反映する。初回だけ家の道具が無い状態で始まる。
+
+## Phase 4 の残り（手順 8〜9）
+
+どちらも MCP が返した機器の状態を描くだけのページ。`tools/` は UI を知らないという規約は変えない — 道具が呼ばれたことを `Conversation` が見て、ページの更新を UI に伝える。ただし MCP の道具名は HA が決めるので、butler のように「この道具が呼ばれたらこの画面」と名前で分岐するのは脆い。**家の道具が呼ばれたら家のページを更新する**、くらいの粗さで始める。
+
+## Phase 1（手順 10〜11）
+
+会話と検出を Foreground Service に移し、Activity は表示だけにする。ウェイクワードは butler の Julius の成果物（音響モデルと辞書）を流用する。
+
+ここだけ `androidTest` を入れる。録音した音声を流し込んで検出率を測る必要があるため（`test-architecture.html` に明記済み）。それ以外でテストの種類は増やさない。
+
+## Phase 5（手順 12）
+
+Immich の API から写真を取って一定間隔で切り替える。1 ページ増やすだけで、他とは繋がらない。
+
+## 気をつける点
+
+- **Spotify の `media_player` が `search_media` に対応していないと、選曲だけ落ちる。** 機器操作は無傷。手順 1 で分かるので、そこで分かったら音楽の選曲は別の道を考える
+- **`tools/list` が大きいと、毎セッションの setup でトークンを食う。** 日次上限に効くので、手順 4 の時点で `Usage` の日額を見て、前と比べる
+- **HA 側で「Assist に公開」していない entity は見えない。** 道具が空で返ったらまずここを疑う
+- **MCP が期待どおり動かなかった場合の退路**は、butler から HA クライアントを移植すること（ファジーマッチ・部屋名の Jinja テンプレート・service のホワイトリストで 400 行以上）。そのときはこの計画の手順 3〜7 を差し替える
+
+## やらないと決めたもの
+
+- **複数の MCP サーバ・OAuth・stdio・呼び出しごとの承認ダイアログ。** 2 台目を繋ぎたくなってから考える
+- **喋りかぶせ（barge-in）。** ソフトウェア AEC が要る。画面タップで返答を捨てる今の形で足りている
+- **Google フォト。** 理由は `architecture.html` の末尾
+- **CI。** 端末 1 台の個人プロジェクトでは、実機で動かすほうが速い
+  </script>
+  <script>
+    document.getElementById('doc').innerHTML =
+      marked.parse(document.getElementById('doc-source').textContent.trim());
+  </script>
+</body>
+</html>
