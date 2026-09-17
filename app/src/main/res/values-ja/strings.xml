@@ -4,6 +4,12 @@
     <string name="settings_api_key">Gemini API キー</string>
     <string name="settings_save">保存</string>
     <string name="settings_saved">保存しました</string>
+    <string name="settings_api_key_help">Google AI Studio で発行します。Android Keystore の鍵で暗号化して保存します。</string>
+    <string name="settings_model_help">アカウントで使える音声会話対応モデルを取得して並べています。文字起こし専用やロボティクス向けも混ざっていて、それらは喋りません。</string>
+    <string name="settings_voice_help">ハチが答えるときの声です。</string>
+    <string name="settings_silence_help">お互い黙ったまま何秒で会話を終えるかです。</string>
+    <string name="settings_daily_cap_help">今日の使用額がこの額に達すると、会話を始められなくなり、続いている会話も終了します。0 で無制限。</string>
+    <string name="settings_usage_help">会話ごとに Gemini が報告するトークン量から計算しています。</string>
     <string name="settings_section_conversation">会話</string>
     <string name="settings_section_spend">料金</string>
     <string name="settings_model">モデル</string>

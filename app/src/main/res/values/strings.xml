@@ -4,6 +4,12 @@
     <string name="settings_api_key">Gemini API key</string>
     <string name="settings_save">Save</string>
     <string name="settings_saved">Saved</string>
+    <string name="settings_api_key_help">Created in Google AI Studio. Stored encrypted with a key held in the Android Keystore.</string>
+    <string name="settings_model_help">Fetched from your account: every model that supports a live voice session. Transcribe-only and robotics models appear here too, and will not talk back.</string>
+    <string name="settings_voice_help">The voice Hachi answers in.</string>
+    <string name="settings_silence_help">How long both sides can stay quiet before the conversation ends by itself.</string>
+    <string name="settings_daily_cap_help">Hachi refuses to start, and ends a running conversation, once this much has been spent today. 0 turns the limit off.</string>
+    <string name="settings_usage_help">Counted from the token usage Gemini reports during each conversation.</string>
     <string name="settings_section_conversation">Conversation</string>
     <string name="settings_section_spend">Spend</string>
     <string name="settings_model">Model</string>
