@@ -41,11 +41,24 @@ adb shell am broadcast -a dev.polidog.hachi.SET -e name geminiKey -e value '...'
 adb logcat -s Hachi
 ```
 
+## butler へのリスペクト
+
+このアプリは [syumai/butler](https://github.com/syumai/butler) が無ければ始まっていない。同じ Echo Show 5 を同じ LineageOS で喋らせる先行プロジェクトで、Hachi はその後を歩いている。
+
+借りているのは、コードよりも**先に調べ尽くされた事実**のほう:
+
+- **この端末にはエコーキャンセラが無い**（`audio_effects.xml` に `aec` の宣言が無く、`AcousticEchoCanceler.isAvailable()` が false）。知らずに書けば、モデルが自分の声を聞いて自分の返答に返答し続ける。Hachi がスピーカーの鳴っている間マイクを捨てているのは、butler がここを踏み抜いた後だから
+- **道具は 1 ファイル 1 つにして、レジストリ越しにだけ見せる形** — `tools/` の構成はほぼそのまま倣っている
+- **秘密情報は Keystore で暗号化して SharedPreferences に入れる**、ログのタグを 1 つに統一する、といった細かい作法
+- Phase 1 のウェイクワードでは、butler が育てた Julius の成果物（音響モデルと辞書）をそのまま使わせてもらう予定
+
+違うのは中身の選択だけ。butler は OpenAI Realtime API、Hachi は Gemini Live API。MCP も butler は OpenAI 側がホストする形を使っているが、Gemini Live には同じ仕組みが無いので、Hachi は端末側に MCP クライアントを置く（結果として LAN の Home Assistant に直接繋がる）。どちらが正しいという話ではなく、**先に道があったから分岐を選べている**。
+
+ありがとうございます。
+
 ## 断り書き
 
 一台の端末のためだけに書いている個人プロジェクト。画面サイズ (960x480)・ABI・Android バージョンは決め打ちで、汎用化していない。
-
-[syumai/butler](https://github.com/syumai/butler) に着想を得ている。同じ端末で動く、OpenAI Realtime API 版の先行プロジェクト。
 
 ## ライセンス
 
