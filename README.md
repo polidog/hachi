@@ -10,15 +10,15 @@ Echo Show 5 (2nd gen) を、Gemini Live API と喋る壁掛けの音声アシス
 - 道具: 時刻と天気（Gemini の function calling）
 - 設定画面（API キーは Android Keystore で暗号化して保管）
 
-これからやること、順番、その理由は [docs/roadmap.html](docs/roadmap.html)。次は Home Assistant の MCP サーバに繋いで、機器と音楽を声で動かせるようにする。
+これからやること、順番、その理由は [実装計画](https://polidog.github.io/hachi/roadmap.html)。次は Home Assistant の MCP サーバに繋いで、機器と音楽を声で動かせるようにする。
 
 ## ドキュメント
 
-HTML なので、GitHub 上では raw で落とすかブラウザで開く。
+**https://polidog.github.io/hachi/**
 
-- [docs/architecture.html](docs/architecture.html) — アーキテクチャ規約。構成、依存の向き、端末固有の制約（エコーキャンセラが無い話など）
-- [docs/roadmap.html](docs/roadmap.html) — 実装計画。手順表と、やらないと決めたもの
-- [docs/test-architecture.html](docs/test-architecture.html) — テスト方針。何を書いて何を書かないか
+- [アーキテクチャ規約](https://polidog.github.io/hachi/architecture.html) — 構成、依存の向き、端末固有の制約（エコーキャンセラが無い話など）
+- [実装計画](https://polidog.github.io/hachi/roadmap.html) — 手順表と、やらないと決めたもの
+- [テストアーキテクチャ規約](https://polidog.github.io/hachi/test-architecture.html) — 何を書いて何を書かないか
 
 ## ビルド
 

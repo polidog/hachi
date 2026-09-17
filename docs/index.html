@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hachi のドキュメント</title>
+<script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900">
+  <main class="mx-auto max-w-4xl px-6 py-10">
+    <article id="doc" class="prose prose-slate dark:prose-invert max-w-none"></article>
+  </main>
+  <!-- 正規データ（機械可読）: 本文の Markdown ソース。編集はこのブロックを更新する -->
+  <script type="text/markdown" id="doc-source">
+# Hachi のドキュメント
+
+Echo Show 5 (2nd gen) を、Gemini Live API と喋る壁掛けの音声アシスタントにするアプリ。
+コードは [github.com/polidog/hachi](https://github.com/polidog/hachi)。
+
+## 規約
+
+- [アーキテクチャ規約](architecture.html) — 構成、依存の向き、端末固有の制約（エコーキャンセラが無い話、料金計上、`tools/` の規約）
+- [テストアーキテクチャ規約](test-architecture.html) — 何を書いて何を書かないか
+
+## 計画
+
+- [実装計画](roadmap.html) — 現在地、着手順とその理由、手順表、やらないと決めたもの
+
+## 自動生成
+
+コードから起こしたもの。手で書いた上の 3 本とは別で、内容が古いことがある。
+
+- [System Model](system-model.html) — フィーチャー・ユースケース・トレーサビリティ
+- [Domain Dictionary](domain-dictionary.md) — 用語
+
+## この端末について
+
+| | |
+|---|---|
+| 機種 | Echo Show 5 (2nd gen) / コードネーム `cronos` |
+| OS | LineageOS 18.1 (Android 11 / API 30) |
+| 画面 | 960x480 横固定 |
+| ABI | armeabi-v7a |
+| エコーキャンセラ | 無し |
+  </script>
+  <script>
+    document.getElementById('doc').innerHTML =
+      marked.parse(document.getElementById('doc-source').textContent.trim());
+  </script>
+</body>
+</html>
