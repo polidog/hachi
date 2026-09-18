@@ -73,8 +73,8 @@ class RainTimelineView(context: Context) : View(context) {
         /** mm/h that fills a bar. 10 mm/h is already heavy rain. */
         const val FULL_SCALE = 10.0
         /** Deep for what has fallen, the plain yellow for what is coming: both read on paper. */
-        val OBSERVED = ACCENT_INK
-        val FORECAST = ACCENT
-        val DRY = Color.argb(0x1F, 0x16, 0x15, 0x12)
+        val OBSERVED get() = ACCENT_INK
+        val FORECAST get() = ACCENT
+        val DRY get() = HAIRLINE_STRONG
     }
 }

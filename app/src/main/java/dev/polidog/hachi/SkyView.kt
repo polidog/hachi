@@ -135,8 +135,9 @@ class SkyView(context: Context) : View(context) {
     private val frame = object : Runnable {
         override fun run() {
             invalidate()
-            // 25 fps is plenty for drifting cloud and falling rain, and leaves the tablet alone.
-            if (animated) postDelayed(this, 40L)
+            // 25 fps is plenty for drifting cloud and falling rain, and leaves the tablet alone. A
+            // still sky is redrawn once a minute, which is how often its colour can change.
+            postDelayed(this, if (animated) 40L else 60_000L)
         }
     }
 
@@ -162,6 +163,7 @@ class SkyView(context: Context) : View(context) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        removeCallbacks(frame)
         frame.run()
     }
 
@@ -305,26 +307,26 @@ class SkyView(context: Context) : View(context) {
                 cloud(canvas, CLOUD_GREY, -0.15f, 0.1f, 1f)
             }
             SkyScene.FOG -> for (band in 0..2) {
-                emblemPaint.color = CLOUD_GREY
+                tone(CLOUD_GREY)
                 val y = (band - 1) * 0.42f * r
                 val inset = if (band == 1) 0f else 0.25f * r
                 canvas.drawRoundRect(-1.1f * r + inset, y - 0.12f * r, 1.1f * r, y + 0.12f * r, 0.12f * r, 0.12f * r, emblemPaint)
             }
             SkyScene.RAIN -> {
                 // Short strokes under the cloud, kept to its left half: the weekday sits under the right.
-                emblemPaint.color = RAIN_MARK
+                tone(RAIN_MARK)
                 emblemPaint.strokeWidth = 0.07f * r
                 emblemPaint.strokeCap = Paint.Cap.ROUND
                 for ((x, y) in MARKS) canvas.drawLine(x * r, y * r, (x - 0.1f) * r, (y + 0.28f) * r, emblemPaint)
                 cloud(canvas, CLOUD_DARK, 0f, -0.1f, 1f)
             }
             SkyScene.SNOW -> {
-                emblemPaint.color = SNOW_MARK
+                tone(SNOW_MARK)
                 for ((x, y) in MARKS) canvas.drawCircle(x * r, (y + 0.1f) * r, 0.09f * r, emblemPaint)
                 cloud(canvas, CLOUD_GREY, 0f, -0.1f, 1f)
             }
             SkyScene.THUNDER -> {
-                emblemPaint.color = ACCENT
+                tone(ACCENT)
                 canvas.save()
                 canvas.translate(-0.55f * r, -0.15f * r)
                 canvas.scale(0.85f, 0.85f)
@@ -340,17 +342,30 @@ class SkyView(context: Context) : View(context) {
     private fun body(canvas: Canvas) {
         val r = height * EMBLEM
         if (isDay) {
-            emblemPaint.color = ACCENT
+            tone(ACCENT)
             canvas.drawCircle(0f, 0f, r, emblemPaint)
         } else {
-            emblemPaint.color = MOON
+            // Lifted clear of the weekday, which by night is light type and would vanish on it.
+            tone(MOON)
+            canvas.save()
+            canvas.translate(0f, -0.3f * r)
             canvas.drawPath(moonShape, emblemPaint)
+            canvas.restore()
         }
+    }
+
+    /**
+     * Sets the emblem's colour, held back by night: full-strength shapes on black are the brightest
+     * thing in a dark room, and the light type laid over them would be lost.
+     */
+    private fun tone(colour: Int) {
+        emblemPaint.color = colour
+        if (Theme.night) emblemPaint.alpha = 0x80
     }
 
     private fun cloud(canvas: Canvas, colour: Int, x: Float, y: Float, scale: Float) {
         val r = height * EMBLEM
-        emblemPaint.color = colour
+        tone(colour)
         canvas.save()
         canvas.translate(x * r, y * r)
         canvas.scale(scale, scale)

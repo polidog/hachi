@@ -41,4 +41,18 @@ class DayPaletteTest {
             }
         }
     }
+
+    @Test
+    fun theTypeTurnsOverAtDuskAndDawn() {
+        assertTrue(isNight(java.time.LocalTime.of(18, 15)))
+        assertTrue(isNight(java.time.LocalTime.of(3, 0)))
+        assertTrue(!isNight(java.time.LocalTime.of(5, 45)))
+        assertTrue(!isNight(java.time.LocalTime.of(18, 14)))
+    }
+
+    @Test
+    fun nightIsDarkAndNoonIsPaper() {
+        assertTrue((DayPalette.at(0).top and 0xFF) < 0x20)
+        assertTrue((DayPalette.at(720).top and 0xFF) > 0xD0)
+    }
 }

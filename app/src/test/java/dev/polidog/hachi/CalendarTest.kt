@@ -73,4 +73,17 @@ class CalendarTest {
         assertEquals(listOf(trip), eventsOn(events, LocalDate.of(2026, 9, 21)))
         assertEquals(emptyList<CalendarEvent>(), eventsOn(events, LocalDate.of(2026, 9, 22)))
     }
+
+    @Test fun `the next event is the first timed one still ahead, never an all-day one`() {
+        val at = { d: Int, h: Int -> calendarEvent("e$d-$h", Instant.parse("2026-09-${d}T${"%02d".format(h - 9)}:00:00Z").toEpochMilli(),
+            Instant.parse("2026-09-${d}T${"%02d".format(h - 8)}:00:00Z").toEpochMilli(), false, null, null, tokyo) }
+        val holiday = calendarEvent("祝日", Instant.parse("2026-09-18T00:00:00Z").toEpochMilli(),
+            Instant.parse("2026-09-19T00:00:00Z").toEpochMilli(), true, null, null, tokyo)
+        val events = listOf(holiday, at(18, 10), at(18, 15), at(19, 11))
+        val now = java.time.LocalDateTime.of(2026, 9, 18, 12, 0)
+        assertEquals("e18-15", nextEvent(events, now)?.title)
+        assertEquals("e19-11", nextEvent(events, now.withHour(16))?.title)
+        assertNull(nextEvent(events, java.time.LocalDateTime.of(2026, 9, 19, 12, 0)))
+        assertNull(nextEvent(listOf(holiday), now))
+    }
 }

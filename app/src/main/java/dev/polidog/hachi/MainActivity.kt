@@ -5,7 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
-import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
@@ -17,6 +17,8 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import dev.polidog.hachi.tools.refreshHouseTools
+import java.time.Duration
+import java.time.LocalTime
 import kotlin.concurrent.thread
 
 /** The clock and the weather. Everything else lifts over them from a button. */
@@ -40,10 +42,16 @@ class MainActivity : Activity(), Conversation.Ui {
     private lateinit var sky: SkyView
     private lateinit var weather: WeatherStore
     private var conversation: Conversation? = null
+    /** Whether this screen was built with the night palette; see [turnOver]. */
+    private var builtNight = false
+    private val turnOver = Runnable { turnOverIfDue() }
     private val wake by lazy { WakeWord(this, settings) { startConversation(calledByName = true) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Theme.refresh()
+        builtNight = Theme.night
+        window.setBackgroundDrawable(ColorDrawable(INK))
         settings = Settings(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.decorView.systemUiVisibility =
@@ -139,6 +147,25 @@ class MainActivity : Activity(), Conversation.Ui {
         )
     }
 
+    /**
+     * Rebuilds the screen with the other palette once the hour has crossed [DUSK] or [DAWN], and
+     * otherwise waits for the next crossing. Never in the middle of a conversation: that would end
+     * it, so the turn waits a minute and asks again.
+     */
+    private fun turnOverIfDue() {
+        val decor = window.decorView
+        decor.removeCallbacks(turnOver)
+        val now = LocalTime.now()
+        if (isNight(now) != builtNight) {
+            if (conversation?.active == true) decor.postDelayed(turnOver, 60_000L) else recreate()
+            return
+        }
+        val next = if (builtNight) DAWN else DUSK
+        var wait = Duration.between(now, next)
+        if (wait.isNegative) wait = wait.plusDays(1)
+        decor.postDelayed(turnOver, wait.toMillis() + 1_000L)
+    }
+
     /** Debug builds only: `-e name debugScene -e value THUNDER` pins the sky to one scene. */
     private fun debugScene(): SkyScene? {
         if (!BuildConfig.DEBUG) return null
@@ -158,6 +185,7 @@ class MainActivity : Activity(), Conversation.Ui {
 
     private fun settingsButton() = ImageView(this).apply {
         setImageResource(R.drawable.ic_settings)
+        imageTintList = ColorStateList.valueOf(TEXT)
         val pad = dp(9)
         setPadding(pad, pad, pad, pad)
         imageAlpha = 0xB3
@@ -179,6 +207,7 @@ class MainActivity : Activity(), Conversation.Ui {
 
     private fun agendaButton() = ImageView(this).apply {
         setImageResource(R.drawable.ic_calendar)
+        imageTintList = ColorStateList.valueOf(TEXT)
         val pad = dp(16)
         setPadding(pad, pad, pad, pad)
         imageAlpha = 0xE6
@@ -189,6 +218,7 @@ class MainActivity : Activity(), Conversation.Ui {
 
     private fun devicesButton() = ImageView(this).apply {
         setImageResource(R.drawable.ic_devices)
+        imageTintList = ColorStateList.valueOf(TEXT)
         val pad = dp(16)
         setPadding(pad, pad, pad, pad)
         imageAlpha = 0xE6
@@ -255,6 +285,8 @@ class MainActivity : Activity(), Conversation.Ui {
 
     override fun onResume() {
         super.onResume()
+        // The hour may have crossed dusk or dawn while the screen was away or asleep.
+        turnOverIfDue()
         // Settings may have changed the key or the cap, and the spend line is stale after a session.
         spend.text = Usage(this).label()
         // Settings may also have renamed Hachi or switched being called by name on or off.
@@ -274,6 +306,7 @@ class MainActivity : Activity(), Conversation.Ui {
 
     override fun onPause() {
         super.onPause()
+        window.decorView.removeCallbacks(turnOver)
         // A conversation cut short by the screen going elsewhere looks exactly like one the server
         // dropped, unless this says which it was.
         if (conversation?.active == true) android.util.Log.i("Hachi", "paused while talking")

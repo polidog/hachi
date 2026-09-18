@@ -126,6 +126,16 @@ fun calendarEvent(
 fun eventsOn(events: List<CalendarEvent>, date: LocalDate): List<CalendarEvent> =
     events.filter { date in it.date..it.lastDate }
 
+/**
+ * The next timed event that has not started yet at [now], or null.
+ *
+ * All-day events are passed over: a holiday calendar puts one on nearly every day, and "all day,
+ * national holiday" is not what anyone glancing at the clock wants to know is next.
+ */
+fun nextEvent(events: List<CalendarEvent>, now: java.time.LocalDateTime): CalendarEvent? =
+    events.filter { it.start != null && it.date.atTime(it.start) > now }
+        .minByOrNull { it.date.atTime(it.start) }
+
 const val UNTITLED = "(untitled)"
 
 // ponytail: a month of a busy calendar is more than anyone is told out loud or reads off a wall;

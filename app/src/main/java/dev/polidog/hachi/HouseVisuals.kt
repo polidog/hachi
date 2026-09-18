@@ -126,7 +126,7 @@ internal class ClimateDial(
             val middle = Math.toRadians((from + sweep / 2).toDouble())
             val at = inner + (outer - inner) / 2
             label.textSize = thickness * if (modes.size > 5) 0.34f else 0.40f
-            label.color = if (on) TEXT else MUTED
+            label.color = if (on) DIAL_TYPE else MUTED
             label.typeface = if (on) DISPLAY else null
             canvas.drawText(
                 modeLabel(it),
@@ -159,7 +159,8 @@ internal class ClimateDial(
         val shown = dragging ?: value
         if (shown != null && min != null && max != null && max > min) {
             val angle = Math.toRadians(((shown - min) / (max - min) * 2 - 1) * SWEEP)
-            line.color = if (dragging != null) ACCENT_INK else TEXT
+            line.color = DIAL_TYPE
+            if (dragging != null) line.color = Color.rgb(0x8F, 0x6B, 0x00)
             line.strokeWidth = context.dp(if (dragging != null) 3 else 2).toFloat()
             val from = outer - context.dp(10)
             val to = radius * 0.42f
@@ -173,7 +174,7 @@ internal class ClimateDial(
         label.color = MUTED
         label.textSize = radius * 0.075f
         canvas.drawText(caption, cx, cy + radius * 0.02f, label)
-        label.color = TEXT
+        label.color = DIAL_TYPE
         label.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
         label.textSize = radius * 0.30f
         val number = shown?.let {
@@ -248,6 +249,8 @@ internal class ClimateDial(
         const val SWEEP = 135.0
         /** gap + thickness + raise, as a fraction of the radius. */
         const val FAN = 0.47f
+        /** Type on the dial: the dial is pale by day and by night, so this does not turn over. */
+        val DIAL_TYPE = Color.rgb(0x16, 0x15, 0x12)
     }
 }
 

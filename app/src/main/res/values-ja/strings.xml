@@ -2,6 +2,7 @@
     <string name="app_name">ハチ</string>
     <string name="action_devices">デバイス操作</string>
     <string name="settings_title">設定</string>
+    <string name="settings_close">閉じる</string>
     <string name="settings_api_key">Gemini API キー</string>
     <string name="settings_save">保存</string>
     <string name="settings_saved">保存しました</string>

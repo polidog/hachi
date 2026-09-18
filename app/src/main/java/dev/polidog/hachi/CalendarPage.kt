@@ -1,7 +1,6 @@
 package dev.polidog.hachi
 
 import android.content.Context
-import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
@@ -24,8 +23,11 @@ import kotlin.concurrent.thread
  * The month as a sheet of dots, off the same calendars the model reads -- see [readCalendar].
  *
  * A filled dot is a day with something on it, an empty ring a free one, and today wears the accent.
- * That is the whole month readable from across the room without a single title on it; tapping a
- * day is what brings its titles up, in a card over the sheet.
+ * That is the whole month readable from across the room without a single title on it.
+ *
+ * The left of the sheet is one day: its number set large, its weekday, and what is on it, set as
+ * type with nothing around it. It opens on today; tapping a dot makes that day the one on the left,
+ * with a yellow ring round its dot, rather than raising a card over the month.
  *
  * It lifts over the clock rather than living on a page of its own: the month is worth a glance now
  * and then, not a quarter of the swiping.
@@ -34,43 +36,19 @@ class CalendarPage(context: Context) : FrameLayout(context) {
     private var month: YearMonth = YearMonth.now()
     private var events: List<CalendarEvent> = emptyList()
 
-    private val today = text(104f, TEXT).apply {
+    /** The day on the left: today until a dot is tapped. */
+    private var day: LocalDate = LocalDate.now()
+
+    private val dayNumber = text(88f, TEXT).apply {
         typeface = DISPLAY
         letterSpacing = -0.03f
         includeFontPadding = false
     }
-    private val weekday = text(22f, TEXT)
-    private val monthLabel = text(20f, TEXT).apply { gravity = Gravity.CENTER }
+    private val weekday = text(20f, TEXT)
+    private val dayList = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+    private val monthLabel = text(16f, TEXT).apply { gravity = Gravity.CENTER }
     private val message = text(14f, MUTED)
     private val grid = GridLayout(context).apply { columnCount = 7 }
-
-    /** The day card, and the dimmed sheet behind it that puts it away when tapped. */
-    private val dayTitle = text(22f, TEXT).apply { typeface = DISPLAY }
-    private val dayList = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    private val popup = FrameLayout(context).apply {
-        setBackgroundColor(Color.argb(0x59, 0x16, 0x15, 0x12))
-        visibility = GONE
-        setOnClickListener { hideDay() }
-        addView(
-            LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                background = context.card(radius = 28)
-                val pad = context.dp(28)
-                setPadding(pad, context.dp(24), pad, context.dp(24))
-                // A tap on the card itself is not a tap on the sheet behind it.
-                isClickable = true
-                addView(dayTitle)
-                addView(
-                    ScrollView(context).apply {
-                        isVerticalScrollBarEnabled = false
-                        addView(dayList)
-                    },
-                    LinearLayout.LayoutParams(FILL, WRAP).apply { topMargin = context.dp(14) },
-                )
-            },
-            LayoutParams(context.dp(440), WRAP, Gravity.CENTER),
-        )
-    }
 
     init {
         setBackgroundColor(INK)
@@ -82,17 +60,24 @@ class CalendarPage(context: Context) : FrameLayout(context) {
 
         val left = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(today)
-            addView(weekday)
             addView(
                 LinearLayout(context).apply {
                     gravity = Gravity.CENTER_VERTICAL
                     addView(arrow("‹", R.string.calendar_previous) { turn(-1) })
-                    addView(monthLabel, LinearLayout.LayoutParams(context.dp(150), WRAP))
+                    addView(monthLabel, LinearLayout.LayoutParams(context.dp(120), WRAP))
                     addView(arrow("›", R.string.calendar_next) { turn(1) })
                 },
-                LinearLayout.LayoutParams(WRAP, WRAP).apply { topMargin = context.dp(20); bottomMargin = context.dp(72) },
+                LinearLayout.LayoutParams(WRAP, WRAP).apply { marginStart = -context.dp(14) },
+            )
+            addView(dayNumber, LinearLayout.LayoutParams(WRAP, WRAP).apply { topMargin = context.dp(6) })
+            addView(weekday)
+            addView(
+                ScrollView(context).apply {
+                    isVerticalScrollBarEnabled = false
+                    addView(dayList)
+                },
+                // Stops above the buttons in the bottom-left corner.
+                LinearLayout.LayoutParams(FILL, 0, 1f).apply { topMargin = context.dp(14); bottomMargin = context.dp(72) },
             )
         }
         val right = LinearLayout(context).apply {
@@ -103,15 +88,12 @@ class CalendarPage(context: Context) : FrameLayout(context) {
         }
         addView(
             LinearLayout(context).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                // The dots sit to the right, clear of the buttons in the bottom-left corner.
                 setPadding(context.dp(40), context.dp(16), context.dp(40), context.dp(16))
-                addView(left, LinearLayout.LayoutParams(0, FILL, 1f))
+                addView(left, LinearLayout.LayoutParams(0, FILL, 1f).apply { marginEnd = context.dp(24) })
                 addView(right, LinearLayout.LayoutParams(WRAP, FILL))
             },
             LayoutParams(FILL, FILL),
         )
-        addView(popup, LayoutParams(FILL, FILL))
     }
 
     val showing get() = visibility == VISIBLE
@@ -119,7 +101,7 @@ class CalendarPage(context: Context) : FrameLayout(context) {
     /** Fades in, a little way up, on this month read afresh. */
     fun show() {
         month = YearMonth.now()
-        hideDay()
+        day = LocalDate.now()
         refresh()
         visibility = VISIBLE
         translationY = context.dp(14).toFloat()
@@ -131,27 +113,27 @@ class CalendarPage(context: Context) : FrameLayout(context) {
             .withEndAction { visibility = GONE }
     }
 
-    /** Back closes the day card first, then the sheet. */
+    /** Back goes to today first, then puts the sheet away. */
     fun back(): Boolean {
-        if (popup.visibility == VISIBLE) hideDay() else hide()
+        if (day != LocalDate.now()) pick(LocalDate.now()) else hide()
         return true
     }
 
     private fun turn(by: Long) {
         month = month.plusMonths(by)
+        // The day on the left follows the month: today in this one, the first in any other.
+        day = if (month == YearMonth.now()) LocalDate.now() else month.atDay(1)
         refresh()
     }
 
     /** Reads the month off the main thread and redraws. */
     private fun refresh() {
-        val now = LocalDate.now()
-        today.text = now.dayOfMonth.toString()
-        weekday.text = now.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
         monthLabel.text = month.format(
             DateTimeFormatter.ofPattern(if (Locale.getDefault().language == "ja") "y年M月" else "MMMM y"),
         )
         events = emptyList()
         drawMonth()
+        drawDay()
         if (!calendarPermitted(context)) {
             say(context.getString(R.string.calendar_no_permission))
             return
@@ -163,7 +145,7 @@ class CalendarPage(context: Context) : FrameLayout(context) {
                 // A second tap on the arrow may have moved on while this was reading.
                 if (asked != month) return@post
                 if (read == null) say(context.getString(R.string.calendar_unavailable))
-                else { say(""); events = read; drawMonth() }
+                else { say(""); events = read; drawMonth(); drawDay() }
             }
         }
     }
@@ -187,11 +169,11 @@ class CalendarPage(context: Context) : FrameLayout(context) {
         for (dayOfMonth in 1..month.lengthOfMonth()) {
             val date = month.atDay(dayOfMonth)
             val busy = eventsOn(events, date).isNotEmpty()
-            grid.addView(dot(date, busy, date == now, date.isBefore(now)), cell())
+            grid.addView(dot(date, busy, date == now, date.isBefore(now), date == day), cell())
         }
     }
 
-    private fun dot(date: LocalDate, busy: Boolean, isToday: Boolean, past: Boolean) = TextView(context).apply {
+    private fun dot(date: LocalDate, busy: Boolean, isToday: Boolean, past: Boolean, chosen: Boolean) = TextView(context).apply {
         text = date.dayOfMonth.toString()
         textSize = 12f
         gravity = Gravity.CENTER
@@ -201,43 +183,47 @@ class CalendarPage(context: Context) : FrameLayout(context) {
             when {
                 isToday -> setColor(ACCENT)
                 busy -> setColor(TEXT)
-                else -> setStroke(context.dp(2), Color.argb(0x33, 0x16, 0x15, 0x12))
+                else -> setStroke(context.dp(2), HAIRLINE_STRONG)
             }
+            // The day on the left, when it is not today: a yellow ring over whatever it is.
+            if (chosen && !isToday) setStroke(context.dp(3), ACCENT)
         }
         setTextColor(if (isToday) ON_ACCENT else if (busy) INK else MUTED)
         // What has gone by is still there to look back at, just quieter than what is to come.
-        alpha = if (past && !isToday) 0.4f else 1f
+        alpha = if (past && !isToday && !chosen) 0.4f else 1f
         contentDescription = dayLabel(date)
-        setOnClickListener { showDay(date) }
+        setOnClickListener { pick(date) }
     }
 
-    private fun showDay(date: LocalDate) {
-        dayTitle.text = dayLabel(date)
+    /** Tapping today's dot, or the chosen one again, goes back to today. */
+    private fun pick(date: LocalDate) {
+        day = if (date == day) LocalDate.now() else date
+        drawMonth()
+        drawDay()
+    }
+
+    private fun drawDay() {
+        dayNumber.text = day.dayOfMonth.toString()
+        val name = day.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+        weekday.text = if (day == LocalDate.now()) "$name · ${context.getString(R.string.weather_today)}" else name
         dayList.removeAllViews()
-        val on = eventsOn(events, date)
+        val on = eventsOn(events, day)
         if (on.isEmpty()) dayList.addView(text(15f, MUTED).apply { text = context.getString(R.string.calendar_none) })
         for (event in on) dayList.addView(row(event))
-        popup.alpha = 0f
-        popup.visibility = VISIBLE
-        popup.animate().alpha(1f).setDuration(160)
-    }
-
-    private fun hideDay() {
-        popup.visibility = GONE
     }
 
     private fun row(event: CalendarEvent) = LinearLayout(context).apply {
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(0, context.dp(7), 0, context.dp(7))
+        setPadding(0, context.dp(5), 0, context.dp(5))
         addView(
             text(14f, MUTED).apply {
                 text = event.start?.format(CLOCK) ?: context.getString(R.string.calendar_all_day)
             },
-            LinearLayout.LayoutParams(context.dp(64), WRAP),
+            LinearLayout.LayoutParams(context.dp(52), WRAP),
         )
         addView(
-            text(17f, TEXT).apply {
-                maxLines = 2
+            text(16f, TEXT).apply {
+                maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
                 text = event.title
             },

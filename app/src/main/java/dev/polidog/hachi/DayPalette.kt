@@ -1,30 +1,43 @@
 package dev.polidog.hachi
 
+import java.time.LocalTime
+
+/**
+ * The type flips where the backdrop is halfway through its half-hour fade (see [DayPalette]): mid
+ * grey, the one moment either set of type reads about as well as the other.
+ * ponytail: fixed hours. Take them from the forecast's sunrise and sunset if a summer evening
+ * going black at a quarter past six ever feels early.
+ */
+val DUSK: LocalTime = LocalTime.of(18, 15)
+val DAWN: LocalTime = LocalTime.of(5, 45)
+
+fun isNight(time: LocalTime): Boolean = time >= DUSK || time < DAWN
+
 /**
  * The colours of the backdrop at one time of day: three gradient stops, top to bottom.
  *
  * Keyframes are interpolated per channel, so the screen drifts through dawn and dusk rather than
  * snapping between looks. The day wraps, so the last keyframe interpolates back toward midnight.
  *
- * All of them are paper: the range is a warm noon down to a cooled, dimmed evening, never dark. A
- * wall this bright at 3am is the price of the light look, and the dimming here is all of the relief
- * there is.
+ * Paper by day and black by night, with half an hour of fade at each end. The type on top turns
+ * over at the middle of each fade -- see [DUSK] and [DAWN] -- which is why the fades are short: the
+ * grey in the middle is where neither light nor dark type reads its best.
  */
 class DayPalette(val top: Int, val middle: Int, val bottom: Int) {
     companion object {
-        /** Dusk and the small hours: the same paper, dimmed and cooled. Never black -- see [INK]. */
-        private fun night() = DayPalette(0xFFC8C6C1.toInt(), 0xFFD2D0CB.toInt(), 0xFFDAD8D3.toInt())
+        /** Night: black, a breath lighter at the bottom so it is a sky and not a switched-off screen. */
+        private fun night() = DayPalette(0xFF050505.toInt(), 0xFF0A0A0A.toInt(), 0xFF121210.toInt())
 
         /** (minuteOfDay, palette), ascending. Exposed so the interpolation can be tested. */
         val keyframes: List<Pair<Int, DayPalette>> = listOf(
             0 to night(),
-            270 to night(), // 04:30 -- holds the night look until it starts to lift
+            330 to night(), // 05:30 -- holds the night until it starts to lift; see DAWN
             360 to DayPalette(0xFFE8DCD0.toInt(), 0xFFEFE3D6.toInt(), 0xFFF3E8DA.toInt()), // 06:00 dawn
             480 to DayPalette(0xFFE7E6E2.toInt(), 0xFFEDECE8.toInt(), 0xFFF1F0EC.toInt()), // 08:00 morning
             720 to DayPalette(0xFFEBEAE6.toInt(), 0xFFF2F1ED.toInt(), 0xFFF6F5F1.toInt()), // 12:00 noon
             960 to DayPalette(0xFFEAE7E0.toInt(), 0xFFF0EDE6.toInt(), 0xFFF4F1EA.toInt()), // 16:00 afternoon
             1080 to DayPalette(0xFFE4D6C8.toInt(), 0xFFE9DCCE.toInt(), 0xFFEDE2D5.toInt()), // 18:00 evening
-            1200 to night(), // 20:00 -- interpolates into the identical midnight keyframe
+            1110 to night(), // 18:30 -- black; the type turned over halfway, at DUSK
         )
 
         /** The palette at [minuteOfDay] (values outside 0..1439 wrap). */

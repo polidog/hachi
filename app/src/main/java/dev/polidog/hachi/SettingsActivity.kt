@@ -1,7 +1,7 @@
 package dev.polidog.hachi
 
 import android.app.Activity
-import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -12,8 +12,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
+import android.widget.FrameLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -23,6 +22,10 @@ import kotlin.concurrent.thread
  * Settings as master/detail: the list of items on the left, the selected item's controls on the
  * right. The screen is 960x480, so there is room for both at once and no need to dive into a dialog
  * for every change.
+ *
+ * Set on the same paper as the rest of the wall, with none of the platform's own widgets showing:
+ * no underlined fields, no radio buttons, no highlighted slab for the selected row. The selected
+ * row is bold with the accent's dot beside it, and a choice is a row with a ring that fills in.
  */
 class SettingsActivity : Activity() {
     /** One settings row. [detail] fills the right-hand pane when the row is selected. */
@@ -45,35 +48,66 @@ class SettingsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Built in whichever palette the hour calls for, like the wall behind it.
+        Theme.refresh()
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(INK))
         settings = Settings(this)
         usage = Usage(this)
         items = buildItems()
         // Opening a pane that happens to contain a text field must not throw the keyboard up over
         // half the screen; the field is focused when it is tapped, not before.
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN)
+        // Full screen like the wall itself; the × in the corner is the way out.
+        window.decorView.systemUiVisibility =
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         pane = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(20), dp(24), dp(20))
+            setPadding(dp(36), dp(28), dp(64), dp(28))
             // Takes the initial focus itself so an EditText inside it does not grab it on open.
             isFocusableInTouchMode = true
         }
 
         setContentView(
-            LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
+            FrameLayout(this).apply {
                 setBackgroundColor(INK)
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    addView(
+                        ScrollView(context).apply {
+                            isVerticalScrollBarEnabled = false
+                            addView(list)
+                        },
+                        LinearLayout.LayoutParams(0, -1, 0.34f),
+                    )
+                    // A hairline, not a change of paper, is all that divides the two panes.
+                    addView(View(context).apply { setBackgroundColor(HAIRLINE) },
+                        LinearLayout.LayoutParams(dp(1), -1).apply { setMargins(0, dp(28), 0, dp(28)) })
+                    addView(
+                        ScrollView(context).apply {
+                            isVerticalScrollBarEnabled = false
+                            addView(pane)
+                        },
+                        LinearLayout.LayoutParams(0, -1, 0.66f),
+                    )
+                })
                 addView(
-                    ScrollView(context).apply {
-                        addView(list)
-                        setBackgroundColor(SURFACE)
+                    TextView(context).apply {
+                        text = "×"
+                        textSize = 30f
+                        setTextColor(TEXT)
+                        gravity = Gravity.CENTER
+                        contentDescription = getString(R.string.settings_close)
+                        setOnClickListener { finish() }
                     },
-                    LinearLayout.LayoutParams(0, -1, 0.36f),
-                )
-                addView(
-                    ScrollView(context).apply { addView(pane) },
-                    LinearLayout.LayoutParams(0, -1, 0.64f),
+                    FrameLayout.LayoutParams(dp(56), dp(56), Gravity.TOP or Gravity.END)
+                        .apply { setMargins(0, dp(10), dp(10), 0) },
                 )
             }
         )
@@ -264,9 +298,10 @@ class SettingsActivity : Activity() {
                 pane.addView(
                     TextView(host).apply {
                         text = host.usage.label()
-                        textSize = 26f
+                        textSize = 36f
+                        typeface = DISPLAY
                         setTextColor(TEXT)
-                        setPadding(0, host.dp(12), 0, 0)
+                        setPadding(0, host.dp(16), 0, 0)
                     }
                 )
             },
@@ -278,9 +313,10 @@ class SettingsActivity : Activity() {
         list.addView(
             TextView(this).apply {
                 text = getString(R.string.settings_title)
-                textSize = 19f
+                textSize = 28f
+                typeface = DISPLAY
                 setTextColor(TEXT)
-                setPadding(dp(18), dp(16), dp(18), dp(6))
+                setPadding(dp(32), dp(24), dp(18), dp(8))
             }
         )
         items.forEachIndexed { index, (section, item) ->
@@ -288,9 +324,11 @@ class SettingsActivity : Activity() {
                 list.addView(
                     TextView(this).apply {
                         text = section
-                        textSize = 12f
-                        setTextColor(ACCENT_INK)
-                        setPadding(dp(18), dp(12), dp(18), dp(2))
+                        textSize = 11f
+                        letterSpacing = 0.25f
+                        isAllCaps = true
+                        setTextColor(MUTED)
+                        setPadding(dp(32), dp(20), dp(18), dp(4))
                     }
                 )
             }
@@ -299,23 +337,34 @@ class SettingsActivity : Activity() {
     }
 
     private fun row(index: Int, item: Item) = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(18), dp(9), dp(14), dp(9))
-        if (index == selected) setBackgroundColor(SURFACE_ON)
-        addView(
-            TextView(context).apply {
-                text = item.title
-                textSize = 15f
-                setTextColor(if (index == selected) ACCENT_INK else TEXT)
-            }
-        )
-        addView(
-            TextView(context).apply {
-                text = item.summary()
-                textSize = 12f
-                setTextColor(MUTED)
-            }
-        )
+        val on = index == selected
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(12), dp(8), dp(14), dp(8))
+        // The dot is always laid out, only painted when selected, so nothing shifts as it moves.
+        addView(View(context).apply {
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(ACCENT) }
+            visibility = if (on) View.VISIBLE else View.INVISIBLE
+        }, LinearLayout.LayoutParams(dp(10), dp(10)).apply { marginEnd = dp(10) })
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(
+                TextView(context).apply {
+                    text = item.title
+                    textSize = 15f
+                    typeface = if (on) DISPLAY else null
+                    setTextColor(TEXT)
+                }
+            )
+            addView(
+                TextView(context).apply {
+                    text = item.summary()
+                    textSize = 12f
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setTextColor(MUTED)
+                }
+            )
+        })
         setOnClickListener { select(index) }
     }
 
@@ -338,29 +387,39 @@ class SettingsActivity : Activity() {
         pane.addView(paneHelp(help))
         // A value chosen before the catalog knew about it must still be selectable.
         val all = if (current in options) options else options + current
-        pane.addView(
-            RadioGroup(this).apply {
-                orientation = RadioGroup.VERTICAL
-                all.forEachIndexed { i, option ->
-                    addView(
-                        RadioButton(context).apply {
-                            id = i + 1
-                            text = option
-                            textSize = 14f
-                            setTextColor(TEXT)
-                            setPadding(dp(6), dp(7), 0, dp(7))
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun draw(chosen: String) {
+            rows.removeAllViews()
+            for (option in all) {
+                val on = option == chosen
+                rows.addView(LinearLayout(this).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(0, dp(9), 0, dp(9))
+                    addView(View(context).apply {
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.OVAL
+                            if (on) setColor(ACCENT) else setStroke(dp(2), HAIRLINE_STRONG)
                         }
-                    )
-                }
-                check(all.indexOf(current) + 1)
-                setOnCheckedChangeListener { _, id ->
-                    if (id > 0) {
-                        save(all[id - 1])
+                    }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(14) })
+                    addView(TextView(context).apply {
+                        text = option
+                        textSize = 15f
+                        typeface = if (on) DISPLAY else null
+                        setTextColor(TEXT)
+                    })
+                    isSelected = on
+                    contentDescription = option
+                    setOnClickListener {
+                        if (on) return@setOnClickListener
+                        save(option)
+                        draw(option)
                         drawList() // the summary in the left-hand list just changed
                     }
-                }
+                })
             }
-        )
+        }
+        draw(current)
+        pane.addView(rows, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
     }
 
     private fun textPane(
@@ -373,14 +432,12 @@ class SettingsActivity : Activity() {
     ) {
         pane.addView(paneTitle(title))
         pane.addView(paneHelp(help))
-        val field = EditText(this).apply {
+        val field = field().apply {
             setText(current)
             this.inputType = inputType
-            textSize = 15f
-            setTextColor(TEXT)
             setSelection(text.length)
         }
-        pane.addView(field, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        pane.addView(field, LinearLayout.LayoutParams(-1, dp(52)).apply { topMargin = dp(14) })
         pane.addView(
             accentButton(getString(R.string.settings_save)).apply {
                 setOnClickListener {
@@ -389,7 +446,7 @@ class SettingsActivity : Activity() {
                     Toast.makeText(this@SettingsActivity, R.string.settings_saved, Toast.LENGTH_SHORT).show()
                 }
             },
-            LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(10); gravity = Gravity.END },
+            LinearLayout.LayoutParams(-2, dp(48)).apply { topMargin = dp(14); gravity = Gravity.END },
         )
     }
 
@@ -406,13 +463,11 @@ class SettingsActivity : Activity() {
         }
         pane.addView(current)
 
-        val field = EditText(this).apply {
+        val field = field().apply {
             hint = getString(R.string.settings_place_hint)
             inputType = InputType.TYPE_CLASS_TEXT
-            textSize = 15f
-            setTextColor(TEXT)
         }
-        pane.addView(field, LinearLayout.LayoutParams(-1, -2))
+        pane.addView(field, LinearLayout.LayoutParams(-1, dp(52)))
 
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         pane.addView(
@@ -444,7 +499,7 @@ class SettingsActivity : Activity() {
                     }
                 }
             },
-            LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8); gravity = Gravity.END },
+            LinearLayout.LayoutParams(-2, dp(48)).apply { topMargin = dp(12); gravity = Gravity.END },
         )
         pane.addView(results, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
     }
@@ -453,31 +508,45 @@ class SettingsActivity : Activity() {
     private fun accentButton(title: String) = Button(this).apply {
         text = title
         isAllCaps = false
-        textSize = 14f
+        textSize = 15f
+        typeface = DISPLAY
         setTextColor(ON_ACCENT)
-        background = pill(dp(20).toFloat(), ACCENT)
+        background = pill(dp(24).toFloat(), ACCENT)
         stateListAnimator = null
-        setPadding(dp(22), 0, dp(22), 0)
+        minWidth = dp(120)
+        setPadding(dp(28), 0, dp(28), 0)
+    }
+
+    /** A text field as a square well in the paper: the platform's underline is the one line too many. */
+    private fun field() = EditText(this).apply {
+        textSize = 16f
+        setTextColor(TEXT)
+        setHintTextColor(MUTED)
+        background = pill(0f, SURFACE)
+        setPadding(dp(18), 0, dp(18), 0)
+        isSingleLine = true
     }
 
     private fun resultLine(text: String, onClick: (() -> Unit)?) = TextView(this).apply {
         this.text = text
-        textSize = 14f
+        textSize = 15f
         setTextColor(if (onClick == null) MUTED else TEXT)
-        setPadding(0, dp(9), 0, dp(9))
+        setPadding(0, dp(11), 0, dp(11))
         if (onClick != null) setOnClickListener { onClick() }
     }
 
     private fun paneTitle(text: String) = TextView(this).apply {
         this.text = text
-        textSize = 20f
+        textSize = 30f
+        typeface = DISPLAY
         setTextColor(TEXT)
     }
 
     private fun paneHelp(text: String): View = TextView(this).apply {
         this.text = text
-        textSize = 12f
+        textSize = 13f
         setTextColor(MUTED)
-        setPadding(0, dp(6), 0, dp(4))
+        setLineSpacing(0f, 1.2f)
+        setPadding(0, dp(8), 0, dp(4))
     }
 }
