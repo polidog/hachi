@@ -39,17 +39,18 @@ fun calendarPermitted(context: Context): Boolean =
     context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
 /**
- * Blocking. The events from today onwards, in time order; null when the provider could not be read.
+ * Blocking. The events from [start] onwards, in time order; null when the provider could not be read.
  *
- * [days] counts today, so 1 is today alone.
+ * [days] counts [start] itself, so 1 is that day alone.
  */
 fun readCalendar(
     context: Context,
     days: Int,
     zone: ZoneId = ZoneId.systemDefault(),
     limit: Int = MAX_EVENTS,
+    start: LocalDate = LocalDate.now(zone),
 ): List<CalendarEvent>? {
-    val (from, to) = calendarWindow(days.toString(), LocalDate.now(zone), zone)
+    val (from, to) = calendarWindow(days.toString(), start, zone)
     // Instances, not Events: a weekly meeting is one Events row, and the occurrences are what a
     // question about today is actually about. The window goes in the path, not in a selection.
     val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
@@ -120,6 +121,10 @@ fun calendarEvent(
         calendar = calendar?.trim().orEmpty(),
     )
 }
+
+/** What is on [date], counting an all-day event on every day it spans and not just its first. */
+fun eventsOn(events: List<CalendarEvent>, date: LocalDate): List<CalendarEvent> =
+    events.filter { date in it.date..it.lastDate }
 
 const val UNTITLED = "(untitled)"
 

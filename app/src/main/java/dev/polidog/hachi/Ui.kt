@@ -2,6 +2,7 @@ package dev.polidog.hachi
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.ViewGroup
 
@@ -21,41 +22,46 @@ fun pill(radiusPx: Float, fill: Int = SURFACE, strokeWidthPx: Int = 0, stroke: I
     }
 
 /**
- * The whole screen's palette: near-black panels, off-white type, one lime accent.
+ * The whole screen's palette: warm off-white paper, near-black type, one yellow accent.
  *
- * One accent and nothing else coloured is what makes the lit thing on a page -- the device that is
- * on, the rain that is coming, the button worth pressing -- findable from across the room.
+ * Paper rather than screen. Nothing on a wall display needs a box drawn around it -- the space
+ * between things says what a border used to, and what is left has to earn its ink. One accent and
+ * nothing else coloured is what makes the lit thing on a page -- the device that is on, the rain
+ * that is coming, today's date -- findable from across the room.
  */
-val INK: Int = Color.rgb(0x0C, 0x0E, 0x0C)
-/** A card at rest, and the fill of the controls that float over the sky. */
-val SURFACE: Int = Color.rgb(0x1A, 0x1D, 0x19)
-/** A card that is on, or selected: the same surface with a little of the accent stirred in. */
-val SURFACE_ON: Int = Color.rgb(0x25, 0x2E, 0x1C)
-val LIME: Int = Color.rgb(0xC8, 0xF2, 0x4E)
-/** Type over the accent. Lime is bright enough that it takes dark type, never white. */
-val ON_LIME: Int = Color.rgb(0x10, 0x14, 0x0B)
-val TEXT: Int = Color.rgb(0xF2, 0xF4, 0xEE)
-val MUTED: Int = Color.rgb(0x93, 0x9B, 0x8F)
-val HAIRLINE: Int = Color.argb(0x1F, 0xFF, 0xFF, 0xFF)
-/** The corner every card shares. */
+val INK: Int = Color.rgb(0xE9, 0xE7, 0xE2)
+/** A panel that genuinely has to be told apart from the paper it sits on, and nothing else. */
+val SURFACE: Int = Color.rgb(0xF4, 0xF2, 0xED)
+/** A panel that is on, or selected: the same surface with a little of the accent stirred in. */
+val SURFACE_ON: Int = Color.rgb(0xFA, 0xF1, 0xCF)
+/** The accent as a fill: the talk button, today, the thing that is on. */
+val ACCENT: Int = Color.rgb(0xFA, 0xD9, 0x4B)
+/**
+ * The accent as type or a hairline. Yellow is a fill colour only -- set as text on paper it all but
+ * disappears -- so anything thin that should read as the accent is set in this deep ochre instead.
+ */
+val ACCENT_INK: Int = Color.rgb(0x8F, 0x6B, 0x00)
+/** Type over the accent. Yellow is light enough that it takes dark type, never white. */
+val ON_ACCENT: Int = Color.rgb(0x16, 0x15, 0x12)
+val TEXT: Int = Color.rgb(0x16, 0x15, 0x12)
+val MUTED: Int = Color.rgb(0x8C, 0x88, 0x7E)
+val HAIRLINE: Int = Color.argb(0x1A, 0x00, 0x00, 0x00)
+/** The corner every panel shares. */
 const val RADIUS = 24
 
-/** A card's face, top to bottom: lit a little at the top, as if the light came from above. */
-private val CARD_TOP: Int = Color.rgb(0x22, 0x26, 0x20)
-private val CARD_BOTTOM: Int = Color.rgb(0x13, 0x16, 0x12)
-private val CARD_ON_TOP: Int = Color.rgb(0x2C, 0x36, 0x1E)
-private val CARD_ON_BOTTOM: Int = Color.rgb(0x1A, 0x20, 0x12)
+/** The face the big numbers are set in: one weight, tight, nothing decorative. */
+val DISPLAY: Typeface = Typeface.create("sans-serif", Typeface.BOLD)
 
 /**
- * The one card in the app: opaque, a shade lighter at the top, with a hairline around it.
+ * A panel, for the few things that are actually objects you press.
  *
- * Opaque on purpose. A translucent panel over the sky picks up whatever cloud is drifting behind it,
- * and a card whose own colour moves is the thing that reads as grubby rather than as an object.
+ * Flat on purpose. The gradient and hairline this used to carry were drawing a box around content
+ * that reads perfectly well without one; what is left is the faintest lift off the paper, so a
+ * tappable tile still looks like a tile and a paragraph of text does not.
  */
-fun Context.card(active: Boolean = false, radius: Int = RADIUS) = GradientDrawable(
-    GradientDrawable.Orientation.TOP_BOTTOM,
-    if (active) intArrayOf(CARD_ON_TOP, CARD_ON_BOTTOM) else intArrayOf(CARD_TOP, CARD_BOTTOM),
-).apply {
+fun Context.card(active: Boolean = false, radius: Int = RADIUS) = GradientDrawable().apply {
+    shape = GradientDrawable.RECTANGLE
     cornerRadius = dp(radius).toFloat()
-    setStroke(dp(1), if (active) LIME else HAIRLINE)
+    setColor(if (active) SURFACE_ON else SURFACE)
+    if (active) setStroke(dp(1), ACCENT_INK)
 }

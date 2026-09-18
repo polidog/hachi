@@ -59,4 +59,15 @@ class ClimateControlsTest {
         assertEquals("https://ha/home/api", climateApiBase("https://ha/home/api/mcp"))
         assertEquals("", climateApiBase("  "))
     }
+
+    @Test fun `the dial snaps to the thermostat's own steps and never leaves its range`() {
+        assertEquals(16.0, dialValue(0f, 16.0, 30.0, 0.5), 0.0)
+        assertEquals(30.0, dialValue(1f, 16.0, 30.0, 0.5), 0.0)
+        assertEquals(23.0, dialValue(0.5f, 16.0, 30.0, 0.5), 0.0)
+        // 16 + 14 * 0.52 = 23.28, which a half-degree thermostat can only take as 23.5.
+        assertEquals(23.5, dialValue(0.52f, 16.0, 30.0, 0.5), 0.0)
+        // Steps count from the bottom of the range, not from zero.
+        assertEquals(16.7, dialValue(0.04f, 16.2, 30.0, 0.5), 1e-9)
+        assertEquals(30.0, dialValue(1.4f, 16.0, 30.0, 1.0), 0.0)
+    }
 }

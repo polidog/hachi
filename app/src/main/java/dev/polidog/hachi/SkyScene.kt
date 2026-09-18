@@ -23,14 +23,19 @@ fun sceneOf(code: Int): SkyScene = when (code) {
  */
 private class Wash(val desaturate: Float, val darken: Float)
 
+/**
+ * Dimming is gentler than it was over a near-black sky: the type on this backdrop is near-black, so
+ * every point the weather takes off the paper is contrast taken off the clock. A thundery afternoon
+ * is a noticeably grey sheet of paper, not a dark one.
+ */
 private val WASHES = mapOf(
     SkyScene.CLEAR to Wash(0f, 1f),
-    SkyScene.PARTLY_CLOUDY to Wash(0.20f, 0.95f),
-    SkyScene.CLOUDY to Wash(0.62f, 0.84f),
-    SkyScene.FOG to Wash(0.80f, 0.88f),
-    SkyScene.RAIN to Wash(0.55f, 0.64f),
-    SkyScene.SNOW to Wash(0.72f, 0.92f),
-    SkyScene.THUNDER to Wash(0.60f, 0.54f),
+    SkyScene.PARTLY_CLOUDY to Wash(0.20f, 0.98f),
+    SkyScene.CLOUDY to Wash(0.62f, 0.93f),
+    SkyScene.FOG to Wash(0.80f, 0.95f),
+    SkyScene.RAIN to Wash(0.55f, 0.86f),
+    SkyScene.SNOW to Wash(0.72f, 0.97f),
+    SkyScene.THUNDER to Wash(0.60f, 0.80f),
 )
 
 /** The palette as [scene] leaves it. */

@@ -84,6 +84,9 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }
         content.removeAllViews()
         val device = devices.firstOrNull { it.key == selected }
+        // The dial sits on the right, clear of the buttons in the bottom-left corner, so it can
+        // have the height they would otherwise keep.
+        setPadding(paddingLeft, paddingTop, paddingRight, context.dp(if (device?.climate != null) 12 else 92))
         header(device, devices)
         if (devices.isEmpty()) {
             content.addView(label(context.getString(when {
@@ -120,10 +123,10 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
                 }, 11f, MUTED))
             }, LinearLayout.LayoutParams(0, WRAP, 1f))
             if (device == null && devices.isNotEmpty()) addView(label(
-                context.getString(R.string.house_active_count, devices.count { it.isOn && (area == null || it.area == area) }), 12f, ON_LIME,
+                context.getString(R.string.house_active_count, devices.count { it.isOn && (area == null || it.area == area) }), 12f, ON_ACCENT,
             ).apply {
                 setPadding(context.dp(16), context.dp(8), context.dp(16), context.dp(8))
-                background = pill(context.dp(18).toFloat(), LIME)
+                background = pill(context.dp(18).toFloat(), ACCENT)
             })
         }, LinearLayout.LayoutParams(FILL, WRAP).apply { bottomMargin = context.dp(8) })
     }
@@ -163,8 +166,8 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
 
     private fun detail(device: Device) {
         val enabled = device.available && !house.busy(device)
-        content.addView(label(if (house.busy(device)) context.getString(R.string.house_sending) else state(device),
-            12f, if (device.isOn) LIME else MUTED).apply {
+        if (device.domain != "climate" || house.busy(device)) content.addView(label(if (house.busy(device)) context.getString(R.string.house_sending) else state(device),
+            12f, if (device.isOn) ACCENT_INK else MUTED).apply {
                 setPadding(context.dp(2), 0, 0, context.dp(6))
             })
         if (device.domain == "climate") {
@@ -175,7 +178,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
                 gravity = Gravity.CENTER_VERTICAL
                 background = panel()
                 setPadding(context.dp(20), context.dp(18), context.dp(20), context.dp(18))
-                addView(HouseGlyph(context, device.domain, if (device.isOn) LIME else MUTED),
+                addView(HouseGlyph(context, device.domain, if (device.isOn) ACCENT_INK else MUTED),
                     LinearLayout.LayoutParams(context.dp(64), context.dp(64)).apply { marginEnd = context.dp(20) })
             }
             listOf(true, false).forEach { on ->
@@ -190,6 +193,13 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }
     }
 
+    /**
+     * The readings down the left, as the reference's row of three turned on its side; the fan of
+     * modes and the dial on the right.
+     *
+     * A thermostat working to a low/high range has two targets and one needle will not say that, so
+     * it keeps the two steppers where the others get the dial -- the fan of modes stays either way.
+     */
     private fun climateDetail(device: Device, enabled: Boolean) {
         val climate = device.climate
         if (climate == null) {
@@ -199,46 +209,83 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
             }, LinearLayout.LayoutParams(context.dp(160), context.dp(52)))
             return
         }
-        val panels = LinearLayout(context).apply { gravity = Gravity.TOP }
-        val temperatures = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            background = panel()
-            setPadding(context.dp(14), context.dp(10), context.dp(14), context.dp(10))
-        }
-        climate.current?.let {
-            temperatures.addView(label(context.getString(R.string.house_current_temperature, degrees(it, device)), 12f, MUTED).apply {
-                gravity = Gravity.CENTER
-            })
-        }
         val range = climate.features and 2 != 0 && (device.state == "heat_cool" || climate.features and 1 == 0)
-        if (range) {
-            temperature(temperatures, device, climate.low, "target_temp_low", R.string.house_low_temperature, enabled, compact = true)
-            temperature(temperatures, device, climate.high, "target_temp_high", R.string.house_high_temperature, enabled, compact = true)
-        } else if (climate.features and 1 != 0) {
-            temperature(temperatures, device, device.setpoint, "temperature", R.string.house_target_temperature, enabled)
-        } else {
-            temperatures.addView(label(context.getString(R.string.house_no_temperature), 13f, MUTED))
-        }
-        panels.addView(temperatures, LinearLayout.LayoutParams(0, WRAP, 1f).apply { marginEnd = context.dp(14) })
-        panels.addView(LinearLayout(context).apply {
+        val single = !range && climate.features and 1 != 0
+        val readings = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, context.dp(4), 0, 0)
-            addView(label(context.getString(R.string.house_mode), 12f, MUTED).apply {
-                setPadding(context.dp(4), 0, 0, context.dp(6))
-            })
-            addView(grid(3).apply {
-                climate.modes.forEach { mode ->
-                    addView(action(context.getString(hvacLabel(mode)), enabled && device.state != mode, device.state == mode) {
-                        house.setMode(device, mode)
-                    }, cell().apply { height = context.dp(48) })
-                }
-            })
-        }, LinearLayout.LayoutParams(0, WRAP, 1.2f))
-        content.addView(panels)
+            addView(stat(R.string.house_room, climate.current?.let { degrees(it, device) } ?: "—"))
+            addView(stat(R.string.house_mode, context.getString(hvacLabel(device.state))))
+            if (range) {
+                temperature(this, device, climate.low, "target_temp_low", R.string.house_low_temperature, enabled)
+                temperature(this, device, climate.high, "target_temp_high", R.string.house_high_temperature, enabled)
+            } else if (!single) {
+                addView(label(context.getString(R.string.house_no_temperature), 13f, MUTED))
+            }
+        }
+        val title = context.getString(R.string.house_target_temperature)
+        val step = { direction: Int -> device.setpoint?.let { climate.shifted(it, direction) } }
+        val dial = LinearLayout(context).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            // The dial is dragged; these are the same thing for a finger that would rather tap, and
+            // for anything reading the screen out loud.
+            if (single) addView(round("−", context.getString(R.string.house_decrease, title),
+                enabled && step(-1) != device.setpoint) { house.setTemperature(device, -1) })
+            addView(ClimateDial(
+                context,
+                modes = climate.modes,
+                mode = device.state,
+                modeLabel = { context.getString(hvacLabel(it)) },
+                value = if (single) device.setpoint else climate.current,
+                climate = climate,
+                caption = context.getString(if (single) R.string.house_target_temperature else R.string.house_room),
+                enabled = enabled,
+                onMode = { house.setMode(device, it) },
+                onTarget = { if (single) house.setTemperatureTo(device, it) },
+            ), LinearLayout.LayoutParams(context.dp(300), FILL))
+            if (single) addView(round("+", context.getString(R.string.house_increase, title),
+                enabled && step(1) != device.setpoint) { house.setTemperature(device, 1) })
+        }
+        // Whatever height the page has left goes to the dial: the viewport is filled, so the weight
+        // is measured against the screen and not against the dial's own wish.
+        content.addView(LinearLayout(context).apply {
+            addView(readings, LinearLayout.LayoutParams(0, WRAP, 1f))
+            addView(dial, LinearLayout.LayoutParams(WRAP, FILL))
+        }, LinearLayout.LayoutParams(FILL, 0, 1f))
     }
 
-    private fun temperature(parent: LinearLayout, device: Device, value: Double?, field: String, title: Int, enabled: Boolean, compact: Boolean = false) {
-        parent.addView(label(context.getString(title), 11f, MUTED).apply { gravity = Gravity.CENTER })
+    /** One reading: a small grey caption over a large plain number, the reference's stat. */
+    private fun stat(title: Int, value: String) = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, 0, 0, context.dp(14))
+        addView(label(context.getString(title), 12f, MUTED))
+        addView(label(value, 26f).apply {
+            typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            setPadding(0, context.dp(4), 0, 0)
+        })
+    }
+
+    /** A round grey button, the reference's icon buttons, carrying one glyph. */
+    private fun round(glyph: String, description: String, enabled: Boolean, click: () -> Unit) = Button(context).apply {
+        text = glyph
+        textSize = 22f
+        setTextColor(TEXT)
+        background = RippleDrawable(ColorStateList.valueOf(HAIRLINE), pill(context.dp(26).toFloat(), SURFACE), null)
+        stateListAnimator = null
+        minWidth = 0
+        minimumWidth = 0
+        setPadding(0, 0, 0, 0)
+        contentDescription = description
+        isEnabled = enabled
+        alpha = if (enabled) 1f else 0.4f
+        setOnClickListener { click() }
+    }.also {
+        it.layoutParams = LinearLayout.LayoutParams(context.dp(52), context.dp(52)).apply {
+            setMargins(context.dp(10), 0, context.dp(10), 0)
+        }
+    }
+
+    private fun temperature(parent: LinearLayout, device: Device, value: Double?, field: String, title: Int, enabled: Boolean) {
+        parent.addView(label(context.getString(title), 13f, MUTED))
         parent.addView(LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
             fun canStep(direction: Int): Boolean {
@@ -253,14 +300,11 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
             addView(action("−", canStep(-1)) { house.setTemperature(device, -1, field) }.apply {
                 contentDescription = context.getString(R.string.house_decrease, context.getString(title))
             }, LinearLayout.LayoutParams(context.dp(48), context.dp(48)))
-            addView(FrameLayout(context).apply {
-                if (!compact) addView(TemperatureArc(context, value, device.climate, device.isOn), FrameLayout.LayoutParams(FILL, FILL))
-                addView(label(value?.let { degrees(it, device) } ?: "—", if (compact) 28f else 38f).apply {
-                    gravity = Gravity.CENTER
-                    maxLines = 1
-                    typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
-                }, FrameLayout.LayoutParams(FILL, FILL))
-            }, LinearLayout.LayoutParams(0, context.dp(if (compact) 54 else 118), 1f))
+            addView(label(value?.let { degrees(it, device) } ?: "—", 28f).apply {
+                gravity = Gravity.CENTER
+                maxLines = 1
+                typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+            }, LinearLayout.LayoutParams(0, context.dp(54), 1f))
             addView(action("+", canStep(1)) { house.setTemperature(device, 1, field) }.apply {
                 contentDescription = context.getString(R.string.house_increase, context.getString(title))
             }, LinearLayout.LayoutParams(context.dp(48), context.dp(48)))
@@ -280,9 +324,9 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
             minimumHeight = context.dp(82)
             addView(LinearLayout(context).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                addView(HouseGlyph(context, domain, if (active) LIME else MUTED),
+                addView(HouseGlyph(context, domain, if (active) ACCENT_INK else MUTED),
                     LinearLayout.LayoutParams(context.dp(22), context.dp(22)))
-                addView(label(if (active) "●" else "○", 10f, if (active) LIME else MUTED).apply {
+                addView(label(if (active) "●" else "○", 10f, if (active) ACCENT_INK else MUTED).apply {
                     gravity = Gravity.END
                 }, LinearLayout.LayoutParams(0, WRAP, 1f))
             })
@@ -307,7 +351,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         textSize = 14f
         // The state the device is already in is outlined in the accent, not filled with it: a
         // filled button asks to be pressed, and that one is the one press that would do nothing.
-        setTextColor(if (active) LIME else TEXT)
+        setTextColor(if (active) ACCENT_INK else TEXT)
         background = touchPanel(active)
         stateListAnimator = null
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)

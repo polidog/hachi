@@ -289,7 +289,7 @@ class SettingsActivity : Activity() {
                     TextView(this).apply {
                         text = section
                         textSize = 12f
-                        setTextColor(LIME)
+                        setTextColor(ACCENT_INK)
                         setPadding(dp(18), dp(12), dp(18), dp(2))
                     }
                 )
@@ -306,7 +306,7 @@ class SettingsActivity : Activity() {
             TextView(context).apply {
                 text = item.title
                 textSize = 15f
-                setTextColor(if (index == selected) LIME else TEXT)
+                setTextColor(if (index == selected) ACCENT_INK else TEXT)
             }
         )
         addView(
@@ -454,8 +454,8 @@ class SettingsActivity : Activity() {
         text = title
         isAllCaps = false
         textSize = 14f
-        setTextColor(ON_LIME)
-        background = pill(dp(20).toFloat(), LIME)
+        setTextColor(ON_ACCENT)
+        background = pill(dp(20).toFloat(), ACCENT)
         stateListAnimator = null
         setPadding(dp(22), 0, dp(22), 0)
     }

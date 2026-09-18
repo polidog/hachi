@@ -1,5 +1,8 @@
 <resources>
-    <style name="AppTheme" parent="android:Theme.Material.NoActionBar.Fullscreen">
-        <item name="android:windowBackground">@android:color/black</item>
+    <!-- Paper, matching INK in Ui.kt: the window behind a page that has not drawn yet. -->
+    <color name="paper">#E9E7E2</color>
+
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/paper</item>
     </style>
 </resources>

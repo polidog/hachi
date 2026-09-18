@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.Typeface
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
@@ -15,13 +14,9 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import dev.polidog.hachi.tools.refreshHouseTools
-import java.time.Duration
-import java.time.LocalDateTime
-import java.util.Locale
 import kotlin.concurrent.thread
 
 /** The clock and the weather. Everything else lifts over them from a button. */
@@ -30,9 +25,7 @@ private const val PAGES = 2
 class MainActivity : Activity(), Conversation.Ui {
     private lateinit var settings: Settings
     private lateinit var captions: ConversationView
-    private lateinit var era: TextView
     private lateinit var spend: TextView
-    private val eraTick = Runnable { bindEra() }
     private lateinit var talk: View
     private lateinit var devices: View
     private lateinit var agenda: View
@@ -69,11 +62,6 @@ class MainActivity : Activity(), Conversation.Ui {
         talk = talkButton()
         devices = devicesButton()
         agenda = agendaButton()
-        era = TextView(this).apply {
-            setTextColor(MUTED)
-            textSize = 11f
-            typeface = Typeface.SANS_SERIF
-        }
         spend = TextView(this).apply {
             setTextColor(MUTED)
             textSize = 11f
@@ -95,6 +83,8 @@ class MainActivity : Activity(), Conversation.Ui {
         pager = PagerView(this).apply {
             addPage(ClockView(context))
             addPage(weatherPage)
+            // The weather emblem belongs to the clock page, so it leaves with it.
+            onScrolled = { sky.emblemOffset = it.toFloat() }
             onPageChanged = { page ->
                 showDots(page)
                 bindButtons()
@@ -118,13 +108,8 @@ class MainActivity : Activity(), Conversation.Ui {
                 )
                 addView(
                     // Top right, beside the settings button: the top left is the pages' own, and
-                    // the bottom corners belong to the buttons.
-                    LinearLayout(context).apply {
-                        gravity = Gravity.CENTER_VERTICAL
-                        addView(era)
-                        addView(spend, LinearLayout.LayoutParams(WRAP, WRAP)
-                            .apply { marginStart = dp(12) })
-                    },
+                    // the bottom corners belong to the buttons. The era moved onto the clock.
+                    spend,
                     FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END)
                         .apply { rightMargin = dp(66); topMargin = dp(24) },
                 )
@@ -163,9 +148,9 @@ class MainActivity : Activity(), Conversation.Ui {
 
     /** Page indicator: the page you are on is the one wearing the accent. */
     private fun showDots(current: Int) {
-        val text = SpannableString((0 until PAGES).joinToString(" ") { "●" })
-        val at = current * 2
-        text.setSpan(ForegroundColorSpan(LIME), at, at + 1, 0)
+        val text = SpannableString((0 until PAGES).joinToString("  ") { "●" })
+        val at = current * 3
+        text.setSpan(ForegroundColorSpan(ACCENT_INK), at, at + 1, 0)
         text.setSpan(ForegroundColorSpan(MUTED), 0, at, 0)
         text.setSpan(ForegroundColorSpan(MUTED), at + 1, text.length, 0)
         dots.text = text
@@ -185,9 +170,9 @@ class MainActivity : Activity(), Conversation.Ui {
         setImageResource(R.drawable.ic_mic)
         val pad = dp(16)
         setPadding(pad, pad, pad, pad)
-        imageTintList = ColorStateList.valueOf(ON_LIME)
+        imageTintList = ColorStateList.valueOf(ON_ACCENT)
         // The one thing on the screen wearing the accent: the button worth pressing.
-        background = pill(dp(28).toFloat(), fill = LIME)
+        background = pill(dp(28).toFloat(), fill = ACCENT)
         contentDescription = getString(R.string.action_talk)
         setOnClickListener { startConversation() }
     }
@@ -272,7 +257,6 @@ class MainActivity : Activity(), Conversation.Ui {
         super.onResume()
         // Settings may have changed the key or the cap, and the spend line is stale after a session.
         spend.text = Usage(this).label()
-        bindEra()
         // Settings may also have renamed Hachi or switched being called by name on or off.
         listenForName()
         // What the house can do is asked for here and used by the next conversation, not this one:
@@ -296,18 +280,6 @@ class MainActivity : Activity(), Conversation.Ui {
         conversation?.stop()
         wake.stop()
         weather.stop()
-        era.removeCallbacks(eraTick)
-    }
-
-    /** The era sits opposite the spend. It only changes at midnight, so that is when it is redrawn. */
-    private fun bindEra() {
-        era.removeCallbacks(eraTick)
-        val now = LocalDateTime.now()
-        val label = clockEra(now, Locale.getDefault())
-        era.text = label
-        era.visibility = if (label.isEmpty()) View.GONE else View.VISIBLE
-        val untilMidnight = Duration.between(now, now.toLocalDate().plusDays(1).atStartOfDay()).toMillis()
-        era.postDelayed(eraTick, untilMidnight + 1_000L)
     }
 
     override fun onState(state: Conversation.State) {
@@ -346,7 +318,7 @@ class MainActivity : Activity(), Conversation.Ui {
     @Deprecated("Uses the platform back callback on this API 30 device")
     override fun onBackPressed() {
         if (calendarPage.showing) {
-            calendarPage.hide()
+            calendarPage.back()
             return
         }
         if (housePage.showing) {

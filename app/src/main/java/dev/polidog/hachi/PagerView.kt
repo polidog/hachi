@@ -18,6 +18,8 @@ import kotlin.math.abs
  */
 class PagerView(context: Context) : ViewGroup(context) {
     var onPageChanged: ((Int) -> Unit)? = null
+    /** Every scroll, in pixels from the first page -- mid-drag as well as settled. */
+    var onScrolled: ((Int) -> Unit)? = null
 
     var page: Int = 0
         private set
@@ -114,6 +116,11 @@ class PagerView(context: Context) : ViewGroup(context) {
             }
         }
         return true
+    }
+
+    override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+        super.onScrollChanged(l, t, oldl, oldt)
+        onScrolled?.invoke(l)
     }
 
     override fun computeScroll() {

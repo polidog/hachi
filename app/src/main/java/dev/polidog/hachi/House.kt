@@ -129,7 +129,18 @@ class House(private val settings: Settings) {
             "target_temp_high" -> details.high?.takeIf { details.features and 2 != 0 }
             else -> null
         } ?: return
-        val target = details.shifted(value, direction) ?: return
+        setTemperatureTo(device, details.shifted(value, direction) ?: return, field)
+    }
+
+    /** The same, to an exact [target] -- what the dial sends when it is let go. */
+    fun setTemperatureTo(device: Device, target: Double, field: String = "temperature") {
+        val details = device.climate ?: return
+        val value = when (field) {
+            "temperature" -> device.setpoint
+            "target_temp_low" -> details.low
+            "target_temp_high" -> details.high
+            else -> null
+        }
         if (target == value) return
         val next = when (field) {
             "target_temp_low" -> details.copy(low = target)

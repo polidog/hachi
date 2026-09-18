@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Matrix
+import android.graphics.Path
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
@@ -21,8 +22,16 @@ import kotlin.random.Random
  * The backdrop every page sits on: the sky at this time of day, in this weather.
  *
  * The time of day sets the colour and the weather drains and dims it, so an overcast noon still
- * reads as noon. Over that go the few marks that say what it is doing: stars, cloud, rain, snow,
- * lightning.
+ * reads as noon. Over that go the few marks that say what it is doing: cloud, rain, snow, lightning.
+ *
+ * Every mark is darker than the paper, not lighter. On a light backdrop a white cloud and a white
+ * snowflake are the same colour as nothing at all -- the sky says what it is doing by what it casts,
+ * which is also why there are no longer any stars: a star is light on dark and has nowhere to go.
+ *
+ * Over all that sits the emblem: the weather drawn as one large flat shape, half off the right edge
+ * of the clock page -- a yellow sun, a moon, a cloud, a cloud with a bolt under it. It is what says
+ * the weather from across the room, where drifting grey only says "something". It belongs to the
+ * clock, so it slides away with that page as the pager turns ([emblemOffset]).
  *
  * A clear day is completely static and is drawn once per minute. Everything else animates at 25 fps,
  * and only while the view is attached -- this is on screen all day on a slow tablet, so a still sky
@@ -31,6 +40,19 @@ import kotlin.random.Random
 class SkyView(context: Context) : View(context) {
     private var scene = SkyScene.CLEAR
     private var isDay = true
+
+    /** How far the pager has scrolled, in pixels: the emblem moves with the clock page. */
+    var emblemOffset = 0f
+        set(value) {
+            if (field == value) return
+            field = value
+            invalidate()
+        }
+
+    private val emblemPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val cloudShape = Path()
+    private val moonShape = Path()
+    private val boltShape = Path()
 
     private val sky = Paint().apply { isDither = true }
     private var skyMinute = -1
@@ -46,7 +68,9 @@ class SkyView(context: Context) : View(context) {
      */
     private val cloudShader = RadialGradient(
         0f, 0f, 1f,
-        intArrayOf(Color.WHITE, Color.argb(0xB0, 0xFF, 0xFF, 0xFF), Color.TRANSPARENT),
+        intArrayOf(
+            Color.rgb(0xC9, 0xC7, 0xC1), Color.argb(0xB0, 0xC9, 0xC7, 0xC1), Color.TRANSPARENT,
+        ),
         floatArrayOf(0f, 0.45f, 1f),
         Shader.TileMode.CLAMP,
     )
@@ -54,23 +78,21 @@ class SkyView(context: Context) : View(context) {
     /**
      * The same lobes in shadow, drawn slightly lower.
      *
-     * Daylight comes from above, so a cloud is bright on top and heavy underneath; a uniformly white
+     * Daylight comes from above, so a cloud is bright on top and heavy underneath; a uniformly flat
      * blob is the thing that reads as cotton wool.
      */
     private val cloudShadeShader = RadialGradient(
         0f, 0f, 1f,
-        intArrayOf(Color.argb(0xFF, 0x33, 0x3B, 0x4A), Color.argb(0x8C, 0x3A, 0x43, 0x54), Color.TRANSPARENT),
+        intArrayOf(Color.argb(0xFF, 0x9A, 0x99, 0x93), Color.argb(0x8C, 0xA4, 0xA2, 0x9C), Color.TRANSPARENT),
         floatArrayOf(0f, 0.5f, 1f),
         Shader.TileMode.CLAMP,
     )
     private val cloudMatrix = Matrix()
     private val rainPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
     private val snowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val starPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val flashPaint = Paint()
     private val fogPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-    private var stars = emptyList<Star>()
     private var clouds = emptyList<Cloud>()
     private var drops = emptyList<Drop>()
     private var flakes = emptyList<Flake>()
@@ -100,7 +122,6 @@ class SkyView(context: Context) : View(context) {
         alpha = 0x0E
     }
 
-    private class Star(val x: Float, val y: Float, val radius: Float, val phase: Float)
     private class Cloud(
         val y: Float, val width: Float, val height: Float, val speed: Float, val offset: Float,
         val alpha: Int,
@@ -119,8 +140,9 @@ class SkyView(context: Context) : View(context) {
         }
     }
 
+    /** A clear sky has nothing moving on it at any hour, so it is drawn once and left alone. */
     private val animated: Boolean
-        get() = scene != SkyScene.CLEAR || !isDay // a clear night still has stars to twinkle
+        get() = scene != SkyScene.CLEAR
 
     /**
      * Called with each weather refresh; null leaves the sky clear. [override] forces a scene, for
@@ -151,19 +173,11 @@ class SkyView(context: Context) : View(context) {
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         skyMinute = -1 // the gradient is height-dependent
         populate(w, h)
+        shapeEmblems(h.toFloat())
     }
 
     private fun populate(w: Int, h: Int) {
         if (w == 0 || h == 0) return
-        stars = List(46) {
-            Star(
-                x = random.nextFloat() * w,
-                // Kept to the upper two thirds; stars at ground level look like dust on the screen.
-                y = random.nextFloat() * h * 0.66f,
-                radius = 0.7f + random.nextFloat() * 1.3f,
-                phase = random.nextFloat() * 6.28f,
-            )
-        }
         val cloudCount = 7
         clouds = List(cloudCount) { index ->
             val lobeCount = 4 + random.nextInt(3)
@@ -176,8 +190,8 @@ class SkyView(context: Context) : View(context) {
                 speed = w * (0.005f + random.nextFloat() * 0.009f),
                 // Spread evenly with a jitter, so they never bunch up on one side of the screen.
                 offset = (index + random.nextFloat() * 0.8f) / cloudCount,
-                // Kept low: the sky is near black now, and white cloud over it reads as smoke.
-                alpha = 0x0A + random.nextInt(0x10),
+                // Kept low: a cloud is a shadow on the paper, and anything solid reads as a stain.
+                alpha = 0x14 + random.nextInt(0x14),
                 lobes = List(lobeCount) { lobe ->
                     val t = (lobe + 0.5f) / lobeCount
                     // Fattest in the middle, thin at the ends: a cloud's silhouette, not a sausage.
@@ -219,11 +233,8 @@ class SkyView(context: Context) : View(context) {
         val seconds = (System.currentTimeMillis() - startedAt) / 1000f
 
         when (scene) {
-            SkyScene.CLEAR -> if (!isDay) drawStars(canvas, seconds)
-            SkyScene.PARTLY_CLOUDY -> {
-                if (!isDay) drawStars(canvas, seconds)
-                drawClouds(canvas, seconds, 0.55f)
-            }
+            SkyScene.CLEAR -> Unit
+            SkyScene.PARTLY_CLOUDY -> drawClouds(canvas, seconds, 0.55f)
             SkyScene.CLOUDY -> drawClouds(canvas, seconds, 1f)
             SkyScene.FOG -> {
                 drawClouds(canvas, seconds, 0.7f)
@@ -244,7 +255,123 @@ class SkyView(context: Context) : View(context) {
             }
         }
 
+        drawEmblem(canvas)
         canvas.drawPaint(grainPaint)
+    }
+
+    /**
+     * The shapes, built once per size around the origin, in units of the emblem's radius [h] * 0.4.
+     *
+     * A cloud is three circles on a flat base -- the silhouette a child draws, which is exactly the
+     * point: it has to be read in half a second from the sofa.
+     */
+    private fun shapeEmblems(h: Float) {
+        val r = h * EMBLEM
+        fun circle(x: Float, y: Float, radius: Float) = Path().apply { addCircle(x * r, y * r, radius * r, Path.Direction.CW) }
+        cloudShape.reset()
+        cloudShape.addRoundRect(-1.05f * r, 0f, 1.05f * r, 0.55f * r, 0.275f * r, 0.275f * r, Path.Direction.CW)
+        cloudShape.op(circle(-0.5f, 0.12f, 0.43f), Path.Op.UNION)
+        cloudShape.op(circle(0.1f, -0.12f, 0.62f), Path.Op.UNION)
+        cloudShape.op(circle(0.65f, 0.14f, 0.40f), Path.Op.UNION)
+        moonShape.reset()
+        moonShape.addCircle(0f, 0f, 0.78f * r, Path.Direction.CW)
+        moonShape.op(circle(-0.42f, -0.26f, 0.70f), Path.Op.DIFFERENCE)
+        boltShape.reset()
+        boltShape.moveTo(0.02f * r, 0.62f * r)
+        boltShape.lineTo(-0.30f * r, 1.18f * r)
+        boltShape.lineTo(-0.04f * r, 1.18f * r)
+        boltShape.lineTo(-0.22f * r, 1.62f * r)
+        boltShape.lineTo(0.30f * r, 1.00f * r)
+        boltShape.lineTo(0.04f * r, 1.00f * r)
+        boltShape.lineTo(0.22f * r, 0.62f * r)
+        boltShape.close()
+    }
+
+    private fun drawEmblem(canvas: Canvas) {
+        val r = height * EMBLEM
+        val cx = width * 0.86f - emblemOffset
+        if (cx + r * 1.2f < 0f || r <= 0f) return
+        val cy = height * 0.40f
+        canvas.save()
+        canvas.translate(cx, cy)
+        when (scene) {
+            SkyScene.CLEAR -> body(canvas)
+            SkyScene.PARTLY_CLOUDY -> {
+                body(canvas)
+                cloud(canvas, CLOUD_LIGHT, -0.55f, 0.45f, 0.75f)
+            }
+            SkyScene.CLOUDY -> {
+                cloud(canvas, CLOUD_BACK, 0.35f, -0.35f, 0.7f)
+                cloud(canvas, CLOUD_GREY, -0.15f, 0.1f, 1f)
+            }
+            SkyScene.FOG -> for (band in 0..2) {
+                emblemPaint.color = CLOUD_GREY
+                val y = (band - 1) * 0.42f * r
+                val inset = if (band == 1) 0f else 0.25f * r
+                canvas.drawRoundRect(-1.1f * r + inset, y - 0.12f * r, 1.1f * r, y + 0.12f * r, 0.12f * r, 0.12f * r, emblemPaint)
+            }
+            SkyScene.RAIN -> {
+                // Short strokes under the cloud, kept to its left half: the weekday sits under the right.
+                emblemPaint.color = RAIN_MARK
+                emblemPaint.strokeWidth = 0.07f * r
+                emblemPaint.strokeCap = Paint.Cap.ROUND
+                for ((x, y) in MARKS) canvas.drawLine(x * r, y * r, (x - 0.1f) * r, (y + 0.28f) * r, emblemPaint)
+                cloud(canvas, CLOUD_DARK, 0f, -0.1f, 1f)
+            }
+            SkyScene.SNOW -> {
+                emblemPaint.color = SNOW_MARK
+                for ((x, y) in MARKS) canvas.drawCircle(x * r, (y + 0.1f) * r, 0.09f * r, emblemPaint)
+                cloud(canvas, CLOUD_GREY, 0f, -0.1f, 1f)
+            }
+            SkyScene.THUNDER -> {
+                emblemPaint.color = ACCENT
+                canvas.save()
+                canvas.translate(-0.55f * r, -0.15f * r)
+                canvas.scale(0.85f, 0.85f)
+                canvas.drawPath(boltShape, emblemPaint)
+                canvas.restore()
+                cloud(canvas, CLOUD_STORM, 0f, -0.1f, 1f)
+            }
+        }
+        canvas.restore()
+    }
+
+    /** The sun by day, the moon by night: whichever is up behind the cloud, if there is one. */
+    private fun body(canvas: Canvas) {
+        val r = height * EMBLEM
+        if (isDay) {
+            emblemPaint.color = ACCENT
+            canvas.drawCircle(0f, 0f, r, emblemPaint)
+        } else {
+            emblemPaint.color = MOON
+            canvas.drawPath(moonShape, emblemPaint)
+        }
+    }
+
+    private fun cloud(canvas: Canvas, colour: Int, x: Float, y: Float, scale: Float) {
+        val r = height * EMBLEM
+        emblemPaint.color = colour
+        canvas.save()
+        canvas.translate(x * r, y * r)
+        canvas.scale(scale, scale)
+        canvas.drawPath(cloudShape, emblemPaint)
+        canvas.restore()
+    }
+
+    private companion object {
+        /** The emblem's radius, as a fraction of the screen's height. */
+        const val EMBLEM = 0.40f
+        val MOON = Color.rgb(0xF6, 0xF2, 0xE2)
+        /** A fair-weather cloud, lighter than the paper so it reads against the sun behind it. */
+        val CLOUD_LIGHT = Color.rgb(0xFA, 0xF9, 0xF6)
+        val CLOUD_BACK = Color.rgb(0xD9, 0xD7, 0xD1)
+        val CLOUD_GREY = Color.rgb(0xC6, 0xC4, 0xBE)
+        val CLOUD_DARK = Color.rgb(0x9C, 0xA3, 0xAA)
+        val CLOUD_STORM = Color.rgb(0x7A, 0x7C, 0x80)
+        val RAIN_MARK = Color.rgb(0x7F, 0x95, 0xAA)
+        val SNOW_MARK = Color.rgb(0xAE, 0xB9, 0xC2)
+        /** Where the drops and flakes fall from, under the cloud's left half, in emblem radii. */
+        val MARKS = listOf(-0.85f to 0.7f, -0.5f to 0.85f, -0.15f to 0.7f, -0.68f to 1.2f, -0.32f to 1.3f)
     }
 
     private fun drawSky(canvas: Canvas, minuteOfDay: Int) {
@@ -260,14 +387,6 @@ class SkyView(context: Context) : View(context) {
             )
         }
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), sky)
-    }
-
-    private fun drawStars(canvas: Canvas, seconds: Float) {
-        for (star in stars) {
-            val twinkle = 0.45f + 0.55f * abs(sin(seconds * 0.9f + star.phase))
-            starPaint.color = Color.argb((0xB4 * twinkle).toInt(), 0xFF, 0xFB, 0xF0)
-            canvas.drawCircle(star.x, star.y, star.radius, starPaint)
-        }
     }
 
     private fun drawClouds(canvas: Canvas, seconds: Float, density: Float) {
@@ -309,7 +428,7 @@ class SkyView(context: Context) : View(context) {
         val span = height + 80f
         for (drop in drops) {
             val y = ((drop.offset * span + seconds * drop.speed) % span) - 40f
-            rainPaint.color = Color.argb(drop.alpha, 0xD6, 0xE6, 0xF5)
+            rainPaint.color = Color.argb(drop.alpha, 0x5C, 0x72, 0x8A)
             rainPaint.strokeWidth = drop.width
             // A consistent lean reads as wind; vertical rain looks like a test pattern.
             canvas.drawLine(drop.x, y, drop.x - drop.length * 0.18f, y + drop.length, rainPaint)
@@ -321,7 +440,7 @@ class SkyView(context: Context) : View(context) {
         for (flake in flakes) {
             val y = ((flake.offset * span + seconds * flake.speed) % span) - 15f
             val x = flake.x + sin(seconds * 0.7f + flake.phase) * flake.sway
-            snowPaint.color = Color.argb(0xC8, 0xFF, 0xFF, 0xFF)
+            snowPaint.color = Color.argb(0x8C, 0x9E, 0xA9, 0xB2)
             canvas.drawCircle(x, y, flake.radius, snowPaint)
         }
     }
@@ -330,7 +449,7 @@ class SkyView(context: Context) : View(context) {
         // Two slow, wide bands sliding past each other, rather than a flat veil.
         for (band in 0..1) {
             val drift = sin(seconds * 0.06f + band * 2.1f) * width * 0.08f
-            fogPaint.color = Color.argb(0x22, 0xEC, 0xEF, 0xF2)
+            fogPaint.color = Color.argb(0x22, 0x9B, 0xA1, 0xA6)
             val top = height * (0.30f + band * 0.26f)
             canvas.drawOval(-width * 0.2f + drift, top, width * 1.2f + drift, top + height * 0.36f, fogPaint)
         }
@@ -345,7 +464,7 @@ class SkyView(context: Context) : View(context) {
             else -> 0f
         }
         if (strength <= 0f) return
-        flashPaint.color = Color.argb((0x66 * strength).toInt(), 0xFF, 0xFF, 0xF2)
+        flashPaint.color = Color.argb((0xA0 * strength).toInt(), 0xFF, 0xFF, 0xF2)
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), flashPaint)
     }
 }

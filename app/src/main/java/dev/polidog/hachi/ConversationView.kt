@@ -29,7 +29,8 @@ class ConversationView(context: Context) : FrameLayout(context) {
         letterSpacing = 0.08f
     }
     private val user = caption(MUTED, Typeface.NORMAL, 15f)
-    private val assistant = caption(TEXT, Typeface.BOLD, 24f)
+    // Not TEXT: the rest of the app is dark type on paper, and this is the one place that is night.
+    private val assistant = caption(Color.rgb(0xF2, 0xF0, 0xEB), Typeface.BOLD, 24f)
 
     init {
         // Black, and opaque: the sky and the clock behind this have no business showing through,

@@ -58,4 +58,19 @@ class CalendarTest {
     private companion object {
         const val DAY = 86_400_000L
     }
+
+    @Test fun `a day holds the all-day events that span it, and nothing from either side`() {
+        val begin = Instant.parse("2026-09-19T00:00:00Z").toEpochMilli()
+        val trip = calendarEvent("旅行", begin, begin + 3 * DAY, true, null, null, tokyo)
+        val dentist = calendarEvent(
+            "歯医者", Instant.parse("2026-09-20T01:00:00Z").toEpochMilli(),
+            Instant.parse("2026-09-20T02:00:00Z").toEpochMilli(), false, null, null, tokyo,
+        )
+        val events = listOf(trip, dentist)
+        assertEquals(emptyList<CalendarEvent>(), eventsOn(events, LocalDate.of(2026, 9, 18)))
+        assertEquals(listOf(trip), eventsOn(events, LocalDate.of(2026, 9, 19)))
+        assertEquals(listOf(trip, dentist), eventsOn(events, LocalDate.of(2026, 9, 20)))
+        assertEquals(listOf(trip), eventsOn(events, LocalDate.of(2026, 9, 21)))
+        assertEquals(emptyList<CalendarEvent>(), eventsOn(events, LocalDate.of(2026, 9, 22)))
+    }
 }

@@ -121,13 +121,16 @@
     <string name="house_high_temperature">設定温度（上限）</string>
     <string name="house_no_temperature">温度設定に対応していません。</string>
     <string name="house_mode">運転モード</string>
+    <string name="house_room">室温</string>
     <string name="house_decrease">%1$sを下げる</string>
     <string name="house_increase">%1$sを上げる</string>
     <string name="house_action_failed">操作を反映できませんでした。もう一度お試しください。</string>
     <string name="calendar_title">これからの予定</string>
     <string name="calendar_date">%1$d/%2$d (%3$s)</string>
     <string name="calendar_all_day">終日</string>
-    <string name="calendar_none">今週の予定はありません。</string>
+    <string name="calendar_none">予定はありません。</string>
     <string name="calendar_unavailable">カレンダーを読めませんでした。</string>
     <string name="calendar_no_permission">カレンダーへのアクセスを許可すると予定が出ます。</string>
+    <string name="calendar_previous">前の月</string>
+    <string name="calendar_next">次の月</string>
 </resources>

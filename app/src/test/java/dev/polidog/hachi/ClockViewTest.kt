@@ -6,8 +6,8 @@ import java.time.LocalDateTime
 import java.util.Locale
 
 class ClockViewTest {
-    @Test fun `Japanese keeps the month and the weekday`() {
-        assertEquals("9月18日 (金)", clockDate(LocalDateTime.of(2026, 9, 18, 7, 30), Locale.JAPAN))
+    @Test fun `Japanese keeps the month and the day`() {
+        assertEquals("9月18日", clockDate(LocalDateTime.of(2026, 9, 18, 7, 30), Locale.JAPAN))
     }
 
     @Test fun `Japanese writes the era on its own`() {
@@ -21,7 +21,7 @@ class ClockViewTest {
 
     @Test fun `English stays a month and a day, with no era`() {
         val now = LocalDateTime.of(2026, 9, 18, 7, 30)
-        assertEquals("Sep 18 (Fri)", clockDate(now, Locale.US))
+        assertEquals("September 18", clockDate(now, Locale.US))
         assertEquals("", clockEra(now, Locale.US))
     }
 }

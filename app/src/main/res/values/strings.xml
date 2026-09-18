@@ -121,13 +121,16 @@
     <string name="house_high_temperature">Upper target</string>
     <string name="house_no_temperature">Temperature adjustment is not supported.</string>
     <string name="house_mode">Mode</string>
+    <string name="house_room">Indoor</string>
     <string name="house_decrease">Decrease %1$s</string>
     <string name="house_increase">Increase %1$s</string>
     <string name="house_action_failed">Could not apply the change. Please try again.</string>
     <string name="calendar_title">Coming up</string>
     <string name="calendar_date">%1$d/%2$d (%3$s)</string>
     <string name="calendar_all_day">All day</string>
-    <string name="calendar_none">Nothing on this week.</string>
+    <string name="calendar_none">Nothing on.</string>
     <string name="calendar_unavailable">Could not read the calendar.</string>
     <string name="calendar_no_permission">Allow calendar access to see what is on.</string>
+    <string name="calendar_previous">Previous month</string>
+    <string name="calendar_next">Next month</string>
 </resources>

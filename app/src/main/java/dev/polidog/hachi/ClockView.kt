@@ -2,7 +2,6 @@ package dev.polidog.hachi
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.view.View
@@ -12,18 +11,26 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-/** Home page 0: the clock, drawn over whatever [SkyView] is showing behind it. */
+/**
+ * Home page 0: the time, set large and flush left, with the date under it.
+ *
+ * The layout is a calendar page's: one heavy number, then the month on one line and the year in grey
+ * under it, with the weekday pushed to the far side. No box, no shadow -- on paper the type is the
+ * whole of the design, and anything behind it only competes.
+ */
 class ClockView(context: Context) : View(context) {
     private val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = TEXT
-        typeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
-        textAlign = Paint.Align.CENTER
+        typeface = DISPLAY
+        // Big numerals set at their default spacing look like they are drifting apart.
+        letterSpacing = -0.03f
     }
     private val datePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = MUTED
-        textAlign = Paint.Align.CENTER
-        letterSpacing = 0.04f
+        color = TEXT
+        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
     }
+    private val yearPaint = Paint(datePaint).apply { color = MUTED }
+    private val weekdayPaint = Paint(datePaint).apply { textAlign = Paint.Align.RIGHT }
 
     private val tick = object : Runnable {
         override fun run() {
@@ -45,29 +52,33 @@ class ClockView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         val now = LocalDateTime.now()
-        timePaint.textSize = height * 0.44f
-        datePaint.textSize = height * 0.085f
-        val shadow = height * 0.02f
-        timePaint.setShadowLayer(shadow, 0f, shadow * 0.3f, SHADOW)
-        datePaint.setShadowLayer(shadow, 0f, shadow * 0.3f, SHADOW)
+        val locale = Locale.getDefault()
+        val side = width * 0.07f
+        timePaint.textSize = height * 0.42f
+        val small = height * 0.07f
+        datePaint.textSize = small
+        yearPaint.textSize = small
+        weekdayPaint.textSize = small
 
-        val cx = width / 2f
-        canvas.drawText(now.format(TIME), cx, height * 0.52f, timePaint)
-        canvas.drawText(clockDate(now, Locale.getDefault()), cx, height * 0.68f, datePaint)
+        val timeBase = height * 0.52f
+        canvas.drawText(now.format(TIME), side, timeBase, timePaint)
+        val dateBase = timeBase + small * 2.1f
+        canvas.drawText(clockDate(now, locale), side, dateBase, datePaint)
+        // The era where there is one, the plain year where there is not: either way, grey under it.
+        val yearBase = dateBase + small * 1.3f
+        canvas.drawText(clockEra(now, locale).ifEmpty { now.year.toString() }, side, yearBase, yearPaint)
+        canvas.drawText(now.dayOfWeek.getDisplayName(TextStyle.FULL, locale), width - side, yearBase, weekdayPaint)
     }
 
     private companion object {
         val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
-        val SHADOW = Color.argb(0x66, 0, 0, 0)
     }
 }
 
-/** The date under the time. The era sits in the corner instead -- see [clockEra]. */
-internal fun clockDate(now: LocalDateTime, locale: Locale): String {
-    val day = now.dayOfWeek.getDisplayName(TextStyle.SHORT, locale)
-    return if (locale.language == "ja") "${now.monthValue}月${now.dayOfMonth}日 ($day)"
-    else "${now.format(DATE.withLocale(locale))} ($day)"
-}
+/** The month and day under the time. The weekday and the era each get their own place. */
+internal fun clockDate(now: LocalDateTime, locale: Locale): String =
+    if (locale.language == "ja") "${now.monthValue}月${now.dayOfMonth}日"
+    else now.format(DATE.withLocale(locale))
 
 /**
  * Empty when the locale has no era to show. A pattern on an ISO date prints 西暦, so this has
@@ -76,7 +87,7 @@ internal fun clockDate(now: LocalDateTime, locale: Locale): String {
 internal fun clockEra(now: LocalDateTime, locale: Locale): String =
     if (locale.language == "ja") now.format(ERA) else ""
 
-private val DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d")
+private val DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM d")
 private val ERA: DateTimeFormatter = DateTimeFormatter.ofPattern("Gy年")
     .withChronology(JapaneseChronology.INSTANCE)
     .withLocale(Locale.JAPAN)

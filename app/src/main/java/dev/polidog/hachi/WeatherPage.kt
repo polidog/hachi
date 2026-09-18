@@ -1,37 +1,47 @@
 package dev.polidog.hachi
 
 import android.content.Context
-import android.graphics.Color
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
 
-/** Home page 1: what it is doing outside now, what it will do today and tomorrow, and the rain. */
+/**
+ * Home page 1: what it is doing outside now, the rest of today, tomorrow, and the rain.
+ *
+ * Laid out like a page of a weather almanac rather than a dashboard: one very large temperature,
+ * the few words that qualify it, and everything else set small around it. Nothing sits in a box;
+ * the columns are held apart by space alone.
+ */
 class WeatherPage(context: Context) : LinearLayout(context) {
     private val place = TextView(context).apply {
         setTextColor(MUTED)
-        textSize = 11f
-        letterSpacing = 0.18f
+        textSize = 12f
+        letterSpacing = 0.3f
+        isAllCaps = true
     }
-    private val emoji = TextView(context).apply { textSize = 40f }
-    private val temperature = TextView(context).apply {
-        setTextColor(TEXT)
-        textSize = 46f
-        // The reference sets its big numbers thin; at this size the default weight reads as a slab.
-        typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
-    }
-    private val condition = TextView(context).apply {
+    private val range = TextView(context).apply {
         setTextColor(MUTED)
         textSize = 15f
     }
-    private val today = DayCard(context)
+    private val temperature = TextView(context).apply {
+        setTextColor(TEXT)
+        textSize = 92f
+        typeface = DISPLAY
+        letterSpacing = -0.03f
+        includeFontPadding = false
+    }
+    private val condition = TextView(context).apply {
+        setTextColor(TEXT)
+        textSize = 22f
+    }
+    private val chance = TextView(context).apply { textSize = 15f }
     private val tomorrow = DayCard(context)
     private val hours = HourlyStrip(context)
     private val rain = RainTimelineView(context)
     private val rainSummary = TextView(context).apply {
         setTextColor(TEXT)
-        textSize = 13f
+        textSize = 15f
     }
     private val message = TextView(context).apply {
         setTextColor(MUTED)
@@ -42,51 +52,37 @@ class WeatherPage(context: Context) : LinearLayout(context) {
 
     init {
         orientation = VERTICAL
-        val side = context.dp(28)
-        setPadding(side, context.dp(16), side, context.dp(20))
+        val side = context.dp(48)
+        setPadding(side, context.dp(28), side, context.dp(24))
 
         addView(place)
         addView(message, LayoutParams(FILL, 0, 1f))
 
-        val now = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(emoji)
-            addView(
-                LinearLayout(context).apply {
-                    orientation = VERTICAL
-                    addView(temperature)
-                    addView(condition)
-                },
-                LayoutParams(WRAP, WRAP).apply { marginStart = context.dp(14) },
-            )
-        }
-        // Left: what it is doing now, with the rain timeline under it. Right: the next two days.
-        // Splitting it this way keeps both columns clear of the Talk button in the middle.
+        // Left: the number and what qualifies it. Right: the rain, then tomorrow.
         val left = LinearLayout(context).apply {
             orientation = VERTICAL
             gravity = Gravity.CENTER_VERTICAL
-            background = context.card()
-            val h = context.dp(16)
-            setPadding(h, context.dp(10), h, context.dp(12))
-            addView(now)
-            addView(rainSummary, LayoutParams(WRAP, WRAP).apply { topMargin = context.dp(12) })
-            addView(
-                rain,
-                LayoutParams(FILL, context.dp(44)).apply { topMargin = context.dp(4) },
-            )
+            // Today's range and its chance of rain share a line: on a 5-inch screen a line of its
+            // own for the chance is the one that falls off the bottom.
+            addView(LinearLayout(context).apply {
+                addView(range)
+                addView(chance, LayoutParams(WRAP, WRAP).apply { marginStart = context.dp(20) })
+            })
+            addView(temperature, LayoutParams(WRAP, WRAP).apply { topMargin = context.dp(4) })
+            addView(condition)
         }
         val right = LinearLayout(context).apply {
             orientation = VERTICAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(today)
-            addView(tomorrow, LayoutParams(FILL, WRAP).apply { topMargin = context.dp(8) })
+            addView(rainSummary)
+            addView(rain, LayoutParams(FILL, context.dp(44)).apply { topMargin = context.dp(8) })
+            addView(tomorrow, LayoutParams(FILL, WRAP).apply { topMargin = context.dp(28) })
         }
         val columns = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(left, LayoutParams(0, WRAP, 1.05f))
-            addView(right, LayoutParams(0, WRAP, 1f).apply { marginStart = context.dp(16) })
+            addView(left, LayoutParams(0, WRAP, 1.1f))
+            addView(right, LayoutParams(0, WRAP, 1f).apply { marginStart = context.dp(32) })
         }
         addView(columns, LayoutParams(FILL, 0, 1f))
         addView(hours, LayoutParams(FILL, WRAP).apply { topMargin = context.dp(10) })
@@ -94,6 +90,7 @@ class WeatherPage(context: Context) : LinearLayout(context) {
 
     fun bind(state: WeatherState) {
         val forecast = state.forecast
+        val parts = listOf<android.view.View>(range, temperature, condition, chance, tomorrow, hours, rain, rainSummary)
         if (state.place == null || forecast == null) {
             // Nothing to show: say which of the two reasons it is.
             message.text = context.getString(
@@ -101,18 +98,23 @@ class WeatherPage(context: Context) : LinearLayout(context) {
             )
             message.visibility = VISIBLE
             place.text = state.place?.name.orEmpty()
-            listOf<android.view.View>(emoji, temperature, condition, today, tomorrow, hours, rain, rainSummary)
-                .forEach { it.visibility = GONE }
+            parts.forEach { it.visibility = GONE }
             return
         }
         message.visibility = GONE
-        listOf<android.view.View>(emoji, temperature, condition, today, tomorrow).forEach { it.visibility = VISIBLE }
+        listOf<android.view.View>(temperature, condition, tomorrow).forEach { it.visibility = VISIBLE }
 
         place.text = state.place.name
-        emoji.text = WeatherText.emoji(forecast.code, forecast.isDay)
-        temperature.text = String.format(Locale.getDefault(), "%.1f°", forecast.temperature)
+        temperature.text = String.format(Locale.getDefault(), "%.0f°", forecast.temperature)
         condition.text = context.getString(WeatherText.labelRes(forecast.code))
-        today.bind(context.getString(R.string.weather_today), forecast.days.getOrNull(0))
+        val today = forecast.days.getOrNull(0)
+        range.visibility = if (today == null) GONE else VISIBLE
+        today?.let { range.text = String.format(Locale.getDefault(), "↑ %.0f°   ↓ %.0f°", it.high, it.low) }
+        chance.visibility = if (today == null || today.rainChance < 0) GONE else VISIBLE
+        today?.let {
+            chance.text = "☂  ${it.rainChance}%"
+            chance.setTextColor(if (it.rainChance >= WET) ACCENT_INK else MUTED)
+        }
         tomorrow.bind(context.getString(R.string.weather_tomorrow), forecast.days.getOrNull(1))
         hours.bind(forecast.hours)
         rain.bind(state.rain)
@@ -152,9 +154,7 @@ private const val WET = 30
 private class HourlyStrip(context: Context) : LinearLayout(context) {
     init {
         orientation = HORIZONTAL
-        background = context.card()
-        val pad = context.dp(12)
-        setPadding(pad, pad, pad, pad)
+        setPadding(0, context.dp(12), 0, 0)
     }
 
     fun bind(hours: List<Hour>) {
@@ -174,7 +174,7 @@ private class HourlyStrip(context: Context) : LinearLayout(context) {
                 String.format(Locale.getDefault(), "%.0f°", hour.temperature)
             (column.getChildAt(3) as TextView).apply {
                 text = if (hour.rainChance >= 0) "${hour.rainChance}%" else ""
-                setTextColor(if (hour.rainChance >= WET) LIME else MUTED)
+                setTextColor(if (hour.rainChance >= WET) ACCENT_INK else MUTED)
             }
         }
     }
@@ -182,10 +182,10 @@ private class HourlyStrip(context: Context) : LinearLayout(context) {
     private fun column() = LinearLayout(context).apply {
         orientation = VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
-        addView(text(11f, MUTED))
+        addView(text(12f, MUTED))
         addView(text(17f, TEXT))
-        addView(text(14f, TEXT))
-        addView(text(11f, LIME))
+        addView(text(15f, TEXT))
+        addView(text(12f, ACCENT_INK))
     }
 
     private fun text(size: Float, colour: Int) = TextView(context).apply {
@@ -201,19 +201,15 @@ private class HourlyStrip(context: Context) : LinearLayout(context) {
 
 /** One day's line: label, icon, high/low and the chance of rain. */
 private class DayCard(context: Context) : LinearLayout(context) {
-    private val label = text(11f, MUTED)
+    private val label = text(13f, MUTED)
     private val icon = text(17f, TEXT)
-    private val range = text(15f, TEXT)
-    private val chance = text(12f, LIME)
+    private val range = text(17f, TEXT)
+    private val chance = text(13f, ACCENT_INK)
 
     init {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        background = context.card()
-        val h = context.dp(16)
-        val v = context.dp(12)
-        setPadding(h, v, h, v)
-        addView(label, LayoutParams(context.dp(44), WRAP))
+        addView(label, LayoutParams(context.dp(52), WRAP))
         addView(icon)
         addView(range, LayoutParams(0, WRAP, 1f).apply { marginStart = context.dp(8) })
         addView(chance)
@@ -227,7 +223,7 @@ private class DayCard(context: Context) : LinearLayout(context) {
         icon.text = WeatherText.emoji(day.code, isDay = true)
         range.text = String.format(Locale.getDefault(), "%.0f° / %.0f°", day.high, day.low)
         chance.text = if (day.rainChance >= 0) "${day.rainChance}%" else ""
-        chance.setTextColor(if (day.rainChance >= WET) LIME else MUTED)
+        chance.setTextColor(if (day.rainChance >= WET) ACCENT_INK else MUTED)
     }
 
     private fun text(size: Float, colour: Int) = TextView(context).apply {
