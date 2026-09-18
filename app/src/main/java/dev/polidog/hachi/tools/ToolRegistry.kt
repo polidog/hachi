@@ -10,6 +10,8 @@ import org.json.JSONObject
 class ToolRegistry(context: Context, settings: Settings) {
     private val tools: List<Tool> = listOfNotNull(
         GetCurrentTimeTool(),
+        TimerTool(context.applicationContext),
+        SetVolumeTool(context.applicationContext),
         GetWeatherTool(context.applicationContext, settings),
         GetCalendarTool(context.applicationContext).takeIf { it.available },
     ) + houseTools(settings)

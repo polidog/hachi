@@ -6,10 +6,12 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.drawable.ColorDrawable
+import android.media.AudioManager
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -54,6 +56,9 @@ class MainActivity : Activity(), Conversation.Ui {
         window.setBackgroundDrawable(ColorDrawable(INK))
         settings = Settings(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // The volume keys otherwise move the media stream, which nothing here plays on: Hachi speaks
+        // on the voice-call stream, so the keys follow it even between conversations.
+        volumeControlStream = AudioManager.STREAM_VOICE_CALL
         window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
                 View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -225,6 +230,8 @@ class MainActivity : Activity(), Conversation.Ui {
     }
 
     private fun startConversation(calledByName: Boolean = false) {
+        // Being called by name over the bell is how it is answered.
+        Timers.silence()
         if (conversation?.active == true) return
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             // The calendar rides along with the microphone: both are asked for while someone is
@@ -310,6 +317,15 @@ class MainActivity : Activity(), Conversation.Ui {
                 listenForName()
             }
         }
+    }
+
+    /** A ringing timer is stopped by touching the screen anywhere, and the touch goes no further. */
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_DOWN && Timers.ringing) {
+            Timers.silence()
+            return true
+        }
+        return super.dispatchTouchEvent(event)
     }
 
     override fun onSpend(label: String) { spend.text = label }
