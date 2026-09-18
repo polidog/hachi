@@ -24,4 +24,10 @@ class ClockViewTest {
         assertEquals("September 18", clockDate(now, Locale.US))
         assertEquals("", clockEra(now, Locale.US))
     }
+
+    @Test fun `a timer counts down in minutes, and in hours once it has any`() {
+        assertEquals("0:05", timerLeft(5))
+        assertEquals("4:32", timerLeft(272))
+        assertEquals("1:00:00", timerLeft(3600))
+    }
 }
