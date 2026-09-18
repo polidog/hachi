@@ -23,7 +23,7 @@ import java.time.Duration
 import java.time.LocalTime
 import kotlin.concurrent.thread
 
-/** The clock and the weather. Everything else lifts over them from a button. */
+/** The clock, the weather and the house. The calendar lifts over the clock from its date. */
 private const val PAGES = 3
 private const val HOUSE = 2
 
@@ -32,7 +32,6 @@ class MainActivity : Activity(), Conversation.Ui {
     private lateinit var captions: ConversationView
     private lateinit var spend: TextView
     private lateinit var talk: View
-    private lateinit var agenda: View
     /** Set while a conversation is running: the buttons are gone for its whole length. */
     private var talking = false
     private lateinit var dots: TextView
@@ -73,7 +72,6 @@ class MainActivity : Activity(), Conversation.Ui {
             onEnd = { conversation?.stop() }
         }
         talk = talkButton()
-        agenda = agendaButton()
         spend = TextView(this).apply {
             setTextColor(MUTED)
             textSize = 11f
@@ -93,7 +91,9 @@ class MainActivity : Activity(), Conversation.Ui {
             textSize = 10f
         }
         pager = PagerView(this).apply {
-            addPage(ClockView(context))
+            addPage(ClockView(context).apply {
+                onAgenda = { calendarPage.show() }
+            })
             addPage(weatherPage)
             addPage(housePage)
             // The weather emblem belongs to the clock page, so it leaves with it.
@@ -137,11 +137,6 @@ class MainActivity : Activity(), Conversation.Ui {
                     talk,
                     FrameLayout.LayoutParams(dp(56), dp(56), Gravity.BOTTOM or Gravity.START)
                         .apply { leftMargin = dp(16); bottomMargin = dp(16) },
-                )
-                addView(
-                    agenda,
-                    FrameLayout.LayoutParams(dp(56), dp(56), Gravity.BOTTOM or Gravity.START)
-                        .apply { leftMargin = dp(84); bottomMargin = dp(16) },
                 )
                 addView(captions)
             }
@@ -206,27 +201,14 @@ class MainActivity : Activity(), Conversation.Ui {
         setOnClickListener { startConversation() }
     }
 
-    private fun agendaButton() = ImageView(this).apply {
-        setImageResource(R.drawable.ic_calendar)
-        imageTintList = ColorStateList.valueOf(TEXT)
-        val pad = dp(16)
-        setPadding(pad, pad, pad, pad)
-        imageAlpha = 0xE6
-        background = card(radius = 28)
-        contentDescription = getString(R.string.calendar_title)
-        setOnClickListener { if (calendarPage.showing) calendarPage.hide() else calendarPage.show() }
-    }
-
     /**
-     * The floating buttons belong to the clock.
+     * The talk button belongs to the clock.
      *
-     * Every other page is a full screen of its own, and three buttons sitting over the bottom left
-     * of it are three buttons in the way of what you came to that page to read.
+     * Every other page is a full screen of its own, and a button sitting over the bottom left of it
+     * is a button in the way of what you came to that page to read.
      */
     private fun bindButtons() {
-        val on = pager.page == 0 && !talking
-        talk.visibility = if (on) View.VISIBLE else View.GONE
-        agenda.visibility = if (on) View.VISIBLE else View.GONE
+        talk.visibility = if (pager.page == 0 && !talking) View.VISIBLE else View.GONE
     }
 
     private fun startConversation(calledByName: Boolean = false) {

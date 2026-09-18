@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.TextPaint
 import android.text.TextUtils
+import android.view.MotionEvent
 import android.view.View
 import java.time.LocalDateTime
 import java.time.chrono.JapaneseChronology
@@ -22,9 +23,13 @@ import kotlin.concurrent.thread
  * whole of the design, and anything behind it only competes.
  *
  * In the bottom-right corner, small, the next thing on the calendar today or tomorrow -- the one
- * piece of the calendar worth having without opening it.
+ * piece of the calendar worth having without opening it. Tapping the date or that line opens it.
+ * Running timers sit in one line over the time, counting down in the accent.
  */
 class ClockView(context: Context) : View(context) {
+    /** A tap on the date or the next event; the time itself is left alone. */
+    var onAgenda: (() -> Unit)? = null
+    private var downY = 0f
     private val timePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = TEXT
         typeface = DISPLAY
@@ -39,6 +44,8 @@ class ClockView(context: Context) : View(context) {
     private val weekdayPaint = Paint(datePaint).apply { textAlign = Paint.Align.RIGHT }
     private val nextPaint = TextPaint(datePaint).apply { textAlign = Paint.Align.RIGHT }
     private val nextTimePaint = Paint(nextPaint).apply { color = MUTED }
+    private val timerPaint = Paint(datePaint).apply { color = ACCENT_INK }
+    private val timerLabelPaint = Paint(datePaint).apply { color = MUTED }
 
     /** Today's and tomorrow's events, re-read every few minutes; what is next is picked per draw. */
     @Volatile private var events: List<CalendarEvent> = emptyList()
@@ -57,6 +64,15 @@ class ClockView(context: Context) : View(context) {
             // Re-align to the next wall-clock second so the display never drifts a beat behind.
             postDelayed(this, 1000L - System.currentTimeMillis() % 1000L)
         }
+    }
+
+    init {
+        setOnClickListener { if (downY > height * TIME_BASE) onAgenda?.invoke() }
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) downY = event.y
+        return super.onTouchEvent(event)
     }
 
     override fun onAttachedToWindow() {
@@ -81,7 +97,7 @@ class ClockView(context: Context) : View(context) {
         yearPaint.textSize = small
         weekdayPaint.textSize = small
 
-        val timeBase = height * 0.52f
+        val timeBase = height * TIME_BASE
         canvas.drawText(now.format(TIME), side, timeBase, timePaint)
         val dateBase = timeBase + small * 2.1f
         canvas.drawText(clockDate(now, locale), side, dateBase, datePaint)
@@ -90,6 +106,24 @@ class ClockView(context: Context) : View(context) {
         canvas.drawText(clockEra(now, locale).ifEmpty { now.year.toString() }, side, yearBase, yearPaint)
         canvas.drawText(now.dayOfWeek.getDisplayName(TextStyle.FULL, locale), width - side, yearBase, weekdayPaint)
         drawNext(canvas, now, side)
+        drawTimers(canvas, side)
+    }
+
+    /** "パスタ 4:32   洗濯 1:01:38" over the time, soonest first -- the one gap the page has free. */
+    private fun drawTimers(canvas: Canvas, side: Float) {
+        timerPaint.textSize = height * 0.055f
+        timerLabelPaint.textSize = timerPaint.textSize
+        val baseline = context.dp(52).toFloat()
+        var x = side
+        for (timer in Timers.pending()) {
+            if (timer.label.isNotBlank()) {
+                canvas.drawText(timer.label + " ", x, baseline, timerLabelPaint)
+                x += timerLabelPaint.measureText(timer.label + " ")
+            }
+            val left = timerLeft(timer.secondsLeft())
+            canvas.drawText(left, x, baseline, timerPaint)
+            x += timerPaint.measureText("$left   ")
+        }
     }
 
     /** "15:00 歯医者", or "明日 10:00 歯医者": the time quiet, the title in ink, flush right. */
@@ -110,7 +144,17 @@ class ClockView(context: Context) : View(context) {
     private companion object {
         val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
         const val REREAD_MS = 5 * 60_000L
+        /** The time's baseline, as a share of the height: the date and the next event sit below it. */
+        const val TIME_BASE = 0.52f
     }
+}
+
+/** A timer's remaining time: "4:32", or "1:04:32" once it runs past the hour. */
+internal fun timerLeft(seconds: Long): String {
+    val h = seconds / 3600
+    val m = seconds / 60 % 60
+    val sec = seconds % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
 }
 
 /** The month and day under the time. The weekday and the era each get their own place. */
