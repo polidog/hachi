@@ -22,14 +22,14 @@ import java.time.LocalTime
 import kotlin.concurrent.thread
 
 /** The clock and the weather. Everything else lifts over them from a button. */
-private const val PAGES = 2
+private const val PAGES = 3
+private const val HOUSE = 2
 
 class MainActivity : Activity(), Conversation.Ui {
     private lateinit var settings: Settings
     private lateinit var captions: ConversationView
     private lateinit var spend: TextView
     private lateinit var talk: View
-    private lateinit var devices: View
     private lateinit var agenda: View
     /** Set while a conversation is running: the buttons are gone for its whole length. */
     private var talking = false
@@ -68,7 +68,6 @@ class MainActivity : Activity(), Conversation.Ui {
             onEnd = { conversation?.stop() }
         }
         talk = talkButton()
-        devices = devicesButton()
         agenda = agendaButton()
         spend = TextView(this).apply {
             setTextColor(MUTED)
@@ -91,6 +90,7 @@ class MainActivity : Activity(), Conversation.Ui {
         pager = PagerView(this).apply {
             addPage(ClockView(context))
             addPage(weatherPage)
+            addPage(housePage)
             // The weather emblem belongs to the clock page, so it leaves with it.
             onScrolled = { sky.emblemOffset = it.toFloat() }
             onPageChanged = { page ->
@@ -98,6 +98,8 @@ class MainActivity : Activity(), Conversation.Ui {
                 bindButtons()
                 // The calendar belongs to the clock; swiping away from it puts the calendar away.
                 if (calendarPage.showing) calendarPage.hide()
+                // The house is asked how it is doing as it is swiped to, and left at its rooms.
+                if (page == HOUSE) refreshHouse() else housePage.reset()
             }
         }
         showDots(0)
@@ -106,8 +108,7 @@ class MainActivity : Activity(), Conversation.Ui {
             FrameLayout(this).apply {
                 addView(sky)
                 addView(pager)
-                // Both lift over the pager and sit under the floating buttons, which stay live.
-                addView(housePage)
+                // Lifts over the pager and sits under the floating buttons, which stay live.
                 addView(calendarPage)
                 addView(
                     dots,
@@ -133,14 +134,9 @@ class MainActivity : Activity(), Conversation.Ui {
                         .apply { leftMargin = dp(16); bottomMargin = dp(16) },
                 )
                 addView(
-                    devices,
-                    FrameLayout.LayoutParams(dp(56), dp(56), Gravity.BOTTOM or Gravity.START)
-                        .apply { leftMargin = dp(84); bottomMargin = dp(16) },
-                )
-                addView(
                     agenda,
                     FrameLayout.LayoutParams(dp(56), dp(56), Gravity.BOTTOM or Gravity.START)
-                        .apply { leftMargin = dp(152); bottomMargin = dp(16) },
+                        .apply { leftMargin = dp(84); bottomMargin = dp(16) },
                 )
                 addView(captions)
             }
@@ -216,26 +212,6 @@ class MainActivity : Activity(), Conversation.Ui {
         setOnClickListener { if (calendarPage.showing) calendarPage.hide() else calendarPage.show() }
     }
 
-    private fun devicesButton() = ImageView(this).apply {
-        setImageResource(R.drawable.ic_devices)
-        imageTintList = ColorStateList.valueOf(TEXT)
-        val pad = dp(16)
-        setPadding(pad, pad, pad, pad)
-        imageAlpha = 0xE6
-        background = card(radius = 28)
-        contentDescription = getString(R.string.action_devices)
-        setOnClickListener { if (housePage.showing) hideHouse() else showHouse() }
-    }
-
-    /** The house is asked how it is doing as it opens, not while nobody is looking at it. */
-    private fun showHouse() {
-        housePage.show()
-        refreshHouse()
-        dots.visibility = View.GONE
-        bindButtons()
-        if (calendarPage.showing) calendarPage.hide()
-    }
-
     /**
      * The floating buttons belong to the clock.
      *
@@ -245,9 +221,7 @@ class MainActivity : Activity(), Conversation.Ui {
     private fun bindButtons() {
         val on = pager.page == 0 && !talking
         talk.visibility = if (on) View.VISIBLE else View.GONE
-        devices.visibility = if (on) View.VISIBLE else View.GONE
-        // The calendar would lift over the house it was opened from.
-        agenda.visibility = if (on && !housePage.showing) View.VISIBLE else View.GONE
+        agenda.visibility = if (on) View.VISIBLE else View.GONE
     }
 
     private fun startConversation(calledByName: Boolean = false) {
@@ -323,7 +297,6 @@ class MainActivity : Activity(), Conversation.Ui {
                 bindButtons()
                 // What was said is what the screen is for while talking; these would sit on top.
                 if (calendarPage.showing) calendarPage.hide()
-                if (housePage.showing) hideHouse()
             }
             // Nothing: the orb is what says it is listening, and a black screen should hold only
             // what was actually said.
@@ -354,18 +327,12 @@ class MainActivity : Activity(), Conversation.Ui {
             calendarPage.back()
             return
         }
-        if (housePage.showing) {
-            // Back steps out of a device and then out of a room before it puts the house away.
-            if (!housePage.back()) hideHouse()
+        if (pager.page == HOUSE) {
+            // Back steps out of a device and then out of a room before it goes back to the clock.
+            if (!housePage.back()) pager.goTo(0)
             return
         }
         super.onBackPressed()
-    }
-
-    private fun hideHouse() {
-        housePage.hide()
-        dots.visibility = View.VISIBLE
-        bindButtons()
     }
 
     private fun refreshHouse() {

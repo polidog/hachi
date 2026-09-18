@@ -4,23 +4,23 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.RippleDrawable
 import android.text.TextUtils
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.FrameLayout
-import android.widget.GridLayout
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import java.text.NumberFormat
 
 /**
- * Rooms → devices → controls. Selecting a card never sends a command to the house.
+ * Rooms → devices → controls. Selecting a row never sends a command to the house.
  *
- * It lifts over whatever page is showing rather than living in the pager: the house is something
- * you come to on purpose, by the Devices button, not something a stray swipe lands you on.
+ * A page of the pager, swiped to like the weather.
  */
 class HousePage(context: Context, private val house: House) : FrameLayout(context) {
     private val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -33,35 +33,19 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
     private var selected: DeviceKey? = null
 
     init {
-        setPadding(context.dp(28), context.dp(54), context.dp(28), context.dp(92))
+        setPadding(context.dp(28), context.dp(54), context.dp(28), context.dp(12))
         setBackgroundColor(INK)
-        // Swallows the taps that would otherwise reach the page underneath, including the swipe
-        // that would turn it.
-        isClickable = true
         // Keep the reserved chrome outside the scrolling viewport. Padding on ScrollView itself
         // can make short overflows fail its touch-scroll range check on this Android version.
         clipToPadding = true
         addView(scroll, LayoutParams(FILL, FILL))
-        alpha = 0f
-        visibility = GONE
     }
 
-    val showing get() = visibility == VISIBLE
-
-    /** Fades in at the room list: coming back to it should not resume someone else's half-press. */
-    fun show() {
+    /** Back at the room list: coming back to it should not resume someone else's half-press. */
+    fun reset() {
         area = null
         selected = null
-        bind()
-        scroll.scrollTo(0, 0)
-        visibility = VISIBLE
-        translationY = context.dp(14).toFloat()
-        animate().alpha(1f).translationY(0f).setDuration(220)
-    }
-
-    fun hide() {
-        animate().alpha(0f).translationY(context.dp(8).toFloat()).setDuration(160)
-            .withEndAction { visibility = GONE }
+        navigate()
     }
 
     fun back(): Boolean {
@@ -84,10 +68,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }
         content.removeAllViews()
         val device = devices.firstOrNull { it.key == selected }
-        // The dial sits on the right, clear of the buttons in the bottom-left corner, so it can
-        // have the height they would otherwise keep.
-        setPadding(paddingLeft, paddingTop, paddingRight, context.dp(if (device?.climate != null) 12 else 92))
-        header(device, devices)
+        header(device)
         if (devices.isEmpty()) {
             content.addView(label(context.getString(when {
                 !house.configured -> R.string.house_unconfigured
@@ -103,53 +84,146 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }
     }
 
-    private fun header(device: Device?, devices: List<Device>) {
+    /** Nothing over the rooms -- the cards say what they are. Below them, the way back and a name. */
+    private fun header(device: Device?) {
+        if (area == null) return
         content.addView(LinearLayout(context).apply {
             gravity = Gravity.CENTER_VERTICAL
-            if (area != null) addView(action(context.getString(R.string.house_back)) { back() },
-                LinearLayout.LayoutParams(context.dp(78), context.dp(48)).apply { marginEnd = context.dp(16) })
-            addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(label(context.getString(R.string.action_devices).uppercase(), 10f, MUTED).apply {
-                    letterSpacing = 0.18f
-                })
-                addView(label(device?.name ?: area?.let(::roomName) ?: context.getString(R.string.house_rooms), 23f).apply {
-                    maxLines = 1
-                })
-                addView(label(when {
-                    device != null -> roomName(device.area)
-                    area != null -> context.getString(R.string.house_choose_device)
-                    else -> context.getString(R.string.house_choose_room)
-                }, 11f, MUTED))
-            }, LinearLayout.LayoutParams(0, WRAP, 1f))
-            if (device == null && devices.isNotEmpty()) addView(label(
-                context.getString(R.string.house_active_count, devices.count { it.isOn && (area == null || it.area == area) }), 12f, ON_ACCENT,
-            ).apply {
-                setPadding(context.dp(16), context.dp(8), context.dp(16), context.dp(8))
-                background = pill(context.dp(18).toFloat(), ACCENT)
+            addView(Button(context).apply {
+                text = context.getString(R.string.house_back)
+                isAllCaps = false
+                textSize = 15f
+                setTextColor(MUTED)
+                background = RippleDrawable(PRESS, null, pill(context.dp(24).toFloat(), Color.WHITE))
+                stateListAnimator = null
+                minWidth = 0
+                minimumWidth = 0
+                setPadding(context.dp(4), 0, context.dp(12), 0)
+                setOnClickListener { back() }
+            }, LinearLayout.LayoutParams(WRAP, context.dp(48)).apply { marginEnd = context.dp(12) })
+            addView(label(device?.name ?: roomName(area!!), 23f).apply { maxLines = 1 },
+                LinearLayout.LayoutParams(0, WRAP, 1f))
+        }, LinearLayout.LayoutParams(FILL, WRAP).apply { bottomMargin = context.dp(12) })
+    }
+
+    /** The rooms as a row of cards, scrolled sideways: six of them will not share this screen. */
+    private fun rooms(devices: List<Device>) =
+        carousel(devices.groupBy { it.area }.map { (room, members) -> roomCard(room, members) }, 280)
+
+    /**
+     * A row of cards taking whatever height the page has, so they never push it into a scroll;
+     * more than fit are reached sideways.
+     */
+    private fun carousel(cards: List<View>, width: Int) {
+        val row = LinearLayout(context)
+        cards.forEach { row.addView(it, LinearLayout.LayoutParams(context.dp(width), FILL).apply { marginEnd = context.dp(16) }) }
+        content.addView(HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = OVER_SCROLL_NEVER
+            addView(row, LayoutParams(WRAP, FILL))
+        }, LinearLayout.LayoutParams(FILL, 0, 1f))
+    }
+
+    /**
+     * A room as the reference's profile card: a picture fading into the card, the room's mark
+     * standing on its edge, the name, what is in it, and the numbers in a row with rules between.
+     */
+    private fun roomCard(room: String, members: List<Device>) = FrameLayout(context).apply {
+        val on = members.count { it.isOn }
+        val indoor = members.firstNotNullOfOrNull { it.climate?.current?.let { t -> degrees(t, it) } }
+        val name = roomName(room)
+        background = RippleDrawable(PRESS, RoomBackdrop(context, room.hashCode()), null)
+
+        // Everything stands on the bottom edge; the picture takes whatever height is left above.
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(context.dp(18), 0, context.dp(14), context.dp(14))
+            addView(FrameLayout(context).apply {
+                background = pill(context.dp(26).toFloat(), SURFACE)
+                addView(HouseGlyph(context, "room", if (on > 0) ACCENT_INK else MUTED),
+                    LayoutParams(context.dp(24), context.dp(24), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(context.dp(52), context.dp(52)).apply { bottomMargin = context.dp(10) })
+            addView(label(name, 19f).apply { maxLines = 1; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) })
+            addView(label(members.joinToString("・") { it.name }, 11f, MUTED).apply {
+                maxLines = 1
+                setPadding(0, context.dp(3), 0, 0)
             })
-        }, LinearLayout.LayoutParams(FILL, WRAP).apply { bottomMargin = context.dp(8) })
+            addView(LinearLayout(context).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, context.dp(14), 0, 0)
+                addView(figure(on.toString(), context.getString(R.string.house_stat_on), if (on > 0) ACCENT_INK else TEXT))
+                addView(rule())
+                addView(figure(members.size.toString(), context.getString(R.string.house_stat_devices)))
+                if (indoor != null) {
+                    addView(rule())
+                    addView(figure(indoor, context.getString(R.string.house_room)))
+                }
+                addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
+                addView(label(context.getString(R.string.house_open_room), 13f, INK).apply {
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    setPadding(context.dp(16), context.dp(8), context.dp(16), context.dp(8))
+                    background = pill(context.dp(20).toFloat(), TEXT)
+                })
+            })
+        }, LayoutParams(FILL, WRAP, Gravity.BOTTOM))
+
+        contentDescription = "$name, " + context.getString(R.string.house_device_count, members.size)
+        isFocusable = true
+        setOnClickListener { area = room; selected = null; navigate() }
     }
 
-    private fun rooms(devices: List<Device>) {
-        val grid = grid(3)
-        devices.groupBy { it.area }.forEach { (room, members) ->
-            grid.addView(card(roomName(room), context.getString(R.string.house_device_count, members.size),
-                members.any { it.isOn }, "room") { area = room; selected = null; navigate() }, cell())
-        }
-        content.addView(grid)
+    /** One number of a room card: the value over a small grey caption. */
+    private fun figure(value: String, caption: String, color: Int = TEXT) = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+        addView(label(value, 15f, color).apply { typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) })
+        addView(label(caption, 10f, MUTED).apply { setPadding(0, context.dp(3), 0, 0) })
     }
 
-    private fun deviceList(devices: List<Device>) {
-        val grid = grid(3)
-        devices.forEach { device ->
-            grid.addView(card(device.name, state(device), device.isOn, device.domain) {
-                selected = device.key
-                navigate()
-            }, cell())
+    private fun rule() = View(context).apply { setBackgroundColor(HAIRLINE_STRONG) }.also {
+        it.layoutParams = LinearLayout.LayoutParams(context.dp(1), context.dp(28)).apply {
+            setMargins(context.dp(12), 0, context.dp(12), 0)
         }
-        content.addView(grid)
     }
+
+    private fun deviceList(devices: List<Device>) = carousel(devices.map(::deviceCard), 196)
+
+    /**
+     * A device as a card lit by its own state: the glyph standing in a pool of its light, the name,
+     * and what it is doing now. Opening it is still the only thing a tap does.
+     */
+    private fun deviceCard(device: Device) = FrameLayout(context).apply {
+        background = RippleDrawable(PRESS, backdrop(device), null)
+        addView(HouseGlyph(context, device.domain, if (device.isOn) ACCENT_INK else MUTED),
+            LayoutParams(context.dp(52), context.dp(52), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = context.dp(30)
+            })
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(context.dp(18), 0, context.dp(14), context.dp(14))
+            addView(label(device.name, 16f).apply { maxLines = 1; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) })
+            addView(LinearLayout(context).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, context.dp(12), 0, 0)
+                addView(label(state(device), 12f, if (device.isOn) ACCENT_INK else MUTED).apply { maxLines = 1 },
+                    LinearLayout.LayoutParams(0, WRAP, 1f))
+                addView(label("›", 18f, INK).apply {
+                    gravity = Gravity.CENTER
+                    background = pill(context.dp(18).toFloat(), TEXT)
+                }, LinearLayout.LayoutParams(context.dp(36), context.dp(36)))
+            })
+        }, LayoutParams(FILL, WRAP, Gravity.BOTTOM))
+        contentDescription = "${device.name}, ${state(device)}"
+        isFocusable = true
+        setOnClickListener { selected = device.key; navigate() }
+    }
+
+    /** The light a device gives off on its card: lamplight, the air conditioner's mode, or none. */
+    private fun backdrop(device: Device, centre: Float = 0.26f) = DeviceBackdrop(context, when {
+        device.domain == "climate" -> modeTones(if (device.available) device.state else "off")
+        device.isOn -> LAMP_TONES
+        else -> modeTones("off")
+    }, device.isOn, centre)
 
     private fun navigate() { bind(); scroll.scrollTo(0, 0) }
     private fun roomName(value: String) = value.ifBlank { context.getString(R.string.house_unassigned) }
@@ -166,31 +240,43 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
 
     private fun detail(device: Device) {
         val enabled = device.available && !house.busy(device)
-        if (device.domain != "climate" || house.busy(device)) content.addView(label(if (house.busy(device)) context.getString(R.string.house_sending) else state(device),
-            12f, if (device.isOn) ACCENT_INK else MUTED).apply {
-                setPadding(context.dp(2), 0, 0, context.dp(6))
-            })
+        val status = if (house.busy(device)) context.getString(R.string.house_sending) else state(device)
         if (device.domain == "climate") {
+            if (house.busy(device)) content.addView(label(status, 12f, MUTED).apply { setPadding(0, 0, 0, context.dp(6)) })
             climateDetail(device, enabled)
-        } else {
-            val cover = device.domain == "cover"
-            val row = LinearLayout(context).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                background = panel()
-                setPadding(context.dp(20), context.dp(18), context.dp(20), context.dp(18))
-                addView(HouseGlyph(context, device.domain, if (device.isOn) ACCENT_INK else MUTED),
-                    LinearLayout.LayoutParams(context.dp(64), context.dp(64)).apply { marginEnd = context.dp(20) })
-            }
-            listOf(true, false).forEach { on ->
+            return
+        }
+        val cover = device.domain == "cover"
+        val tone = if (device.isOn) ACCENT_INK else MUTED
+        val buttons = LinearLayout(context).apply {
+            // Only the press that would change something: the state it is already in is the line
+            // above, not a button. Unknown offers both.
+            listOf(true, false).filter { device.state == "unknown" || device.isOn != it }.forEach { on ->
                 val title = context.getString(if (cover) {
                     if (on) R.string.house_open else R.string.house_close
                 } else if (on) R.string.house_turn_on else R.string.house_turn_off)
-                row.addView(action(title, enabled && (device.state == "unknown" || device.isOn != on), device.state != "unknown" && device.isOn == on) {
+                addView(action(title, enabled, primary = true) {
                     house.setPower(device, on)
-                }, LinearLayout.LayoutParams(0, context.dp(64), 1f).apply { setMargins(context.dp(6), 0, context.dp(6), 0) })
+                }, LinearLayout.LayoutParams(context.dp(180), context.dp(56)).apply { marginEnd = context.dp(12) })
             }
-            content.addView(row)
         }
+        // The device card grown large on the left, lit as it is; what it is doing and the press
+        // that changes it on the right.
+        content.addView(LinearLayout(context).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(FrameLayout(context).apply {
+                background = backdrop(device, 0.5f)
+                addView(HouseGlyph(context, device.domain, tone), LayoutParams(context.dp(96), context.dp(96), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(context.dp(300), FILL).apply { marginEnd = context.dp(36) })
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(label(status, 34f, tone).apply {
+                    typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+                    setPadding(0, 0, 0, context.dp(20))
+                })
+                addView(buttons)
+            })
+        }, LinearLayout.LayoutParams(FILL, 0, 1f))
     }
 
     /**
@@ -264,12 +350,12 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         })
     }
 
-    /** A round grey button, the reference's icon buttons, carrying one glyph. */
+    /** A round outlined button carrying one glyph. */
     private fun round(glyph: String, description: String, enabled: Boolean, click: () -> Unit) = Button(context).apply {
         text = glyph
         textSize = 22f
         setTextColor(TEXT)
-        background = RippleDrawable(ColorStateList.valueOf(HAIRLINE), pill(context.dp(26).toFloat(), SURFACE), null)
+        background = RippleDrawable(PRESS, pill(context.dp(26).toFloat(), Color.TRANSPARENT, context.dp(1), HAIRLINE_STRONG), null)
         stateListAnimator = null
         minWidth = 0
         minimumWidth = 0
@@ -314,62 +400,28 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
     private fun degrees(value: Double, device: Device) =
         NumberFormat.getNumberInstance().apply { maximumFractionDigits = 2 }.format(value) + (device.climate?.unit ?: "°")
 
-    private fun card(title: String, subtitle: String, active: Boolean, domain: String, click: () -> Unit) =
-        LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            // Every card wears the same face. What is on is said by the glyph and the dot, not by
-            // lighting up a third of the screen -- eleven lit cards say nothing at all.
-            background = touchPanel(false)
-            setPadding(context.dp(16), context.dp(8), context.dp(16), context.dp(8))
-            minimumHeight = context.dp(82)
-            addView(LinearLayout(context).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                addView(HouseGlyph(context, domain, if (active) ACCENT_INK else MUTED),
-                    LinearLayout.LayoutParams(context.dp(22), context.dp(22)))
-                addView(label(if (active) "●" else "○", 10f, if (active) ACCENT_INK else MUTED).apply {
-                    gravity = Gravity.END
-                }, LinearLayout.LayoutParams(0, WRAP, 1f))
-            })
-            addView(label(title, 16f).apply {
-                maxLines = 1
-                setPadding(0, context.dp(5), 0, context.dp(2))
-            })
-            addView(LinearLayout(context).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                addView(label(subtitle, 11f, MUTED).apply { maxLines = 1 },
-                    LinearLayout.LayoutParams(0, WRAP, 1f))
-                addView(label("›", 14f, MUTED))
-            })
-            contentDescription = "$title, $subtitle"
-            isFocusable = true
-            setOnClickListener { click() }
-        }
-
-    private fun action(title: String, enabled: Boolean = true, active: Boolean = false, click: () -> Unit) = Button(context).apply {
+    /**
+     * A pill: outlined for the small steps, filled dark for the one press a page is for -- the same
+     * dark pill the cards open with.
+     */
+    private fun action(title: String, enabled: Boolean = true, primary: Boolean = false, click: () -> Unit) = Button(context).apply {
         text = title
         isAllCaps = false
-        textSize = 14f
-        // The state the device is already in is outlined in the accent, not filled with it: a
-        // filled button asks to be pressed, and that one is the one press that would do nothing.
-        setTextColor(if (active) ACCENT_INK else TEXT)
-        background = touchPanel(active)
+        textSize = 15f
+        setTextColor(if (primary) INK else TEXT)
+        val radius = context.dp(RADIUS).toFloat()
+        background = RippleDrawable(PRESS,
+            if (primary) pill(radius, TEXT) else pill(radius, Color.TRANSPARENT, context.dp(1), HAIRLINE_STRONG),
+            pill(radius, Color.WHITE))
         stateListAnimator = null
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         minWidth = 0
         minimumWidth = 0
         setPadding(context.dp(8), 0, context.dp(8), 0)
         isEnabled = enabled
-        isSelected = active
-        alpha = if (enabled || active) 1f else 0.45f
+        alpha = if (enabled) 1f else 0.45f
         setOnClickListener { click() }
     }
-
-    private fun panel(active: Boolean = false) = context.card(active)
-
-    private fun touchPanel(active: Boolean) = RippleDrawable(
-        ColorStateList.valueOf(Color.argb(50, 0xC8, 0xF2, 0x4E)), panel(active),
-        pill(context.dp(RADIUS).toFloat(), Color.WHITE),
-    )
 
     private fun label(value: String, size: Float, color: Int = TEXT) = TextView(context).apply {
         text = value
@@ -381,12 +433,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         ellipsize = TextUtils.TruncateAt.END
     }
 
-    private fun grid(columns: Int) = GridLayout(context).apply { columnCount = columns }
-    private fun cell() = GridLayout.LayoutParams().apply {
-        width = 0
-        columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-        setMargins(context.dp(4), context.dp(4), context.dp(4), context.dp(4))
-    }
+    private val PRESS get() = ColorStateList.valueOf(HAIRLINE_STRONG)
 
 }
 

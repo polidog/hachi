@@ -33,6 +33,10 @@ import kotlin.random.Random
  * the weather from across the room, where drifting grey only says "something". It belongs to the
  * clock, so it slides away with that page as the pager turns ([emblemOffset]).
  *
+ * By day the emblem hangs a little above the paper and casts a long flat shadow on it, the paper's
+ * own colour taken darker -- the way a flat illustration seen from overhead shows the light. The
+ * shadow swings and shortens with the hour ([castAt]), so it also says roughly what time it is.
+ *
  * A clear day is completely static and is drawn once per minute. Everything else animates at 25 fps,
  * and only while the view is attached -- this is on screen all day on a slow tablet, so a still sky
  * should cost nothing.
@@ -53,6 +57,11 @@ class SkyView(context: Context) : View(context) {
     private val cloudShape = Path()
     private val moonShape = Path()
     private val boltShape = Path()
+
+    /** True while the emblem is being drawn a second time, as its shadow. */
+    private var casting = false
+    private var shadowColour = 0
+    private val castMatrix = Matrix()
 
     private val sky = Paint().apply { isDither = true }
     private var skyMinute = -1
@@ -119,7 +128,7 @@ class SkyView(context: Context) : View(context) {
             Shader.TileMode.REPEAT,
             Shader.TileMode.REPEAT,
         )
-        alpha = 0x0E
+        alpha = 0x14
     }
 
     private class Cloud(
@@ -296,6 +305,31 @@ class SkyView(context: Context) : View(context) {
         val cy = height * 0.40f
         canvas.save()
         canvas.translate(cx, cy)
+        // A shadow on black is nothing, so by night the emblem stands alone.
+        if (!Theme.night) {
+            val now = LocalDateTime.now()
+            val cast = castAt(now.hour * 60 + now.minute)
+            val angle = Math.toRadians(cast.angle.toDouble())
+            castMatrix.setRotate(-cast.angle)
+            castMatrix.postScale(cast.stretch, 1f)
+            castMatrix.postRotate(cast.angle)
+            castMatrix.postTranslate(
+                (kotlin.math.cos(angle) * cast.reach * r).toFloat(),
+                (kotlin.math.sin(angle) * cast.reach * r).toFloat(),
+            )
+            canvas.save()
+            canvas.concat(castMatrix)
+            casting = true
+            shapes(canvas)
+            casting = false
+            canvas.restore()
+        }
+        shapes(canvas)
+        canvas.restore()
+    }
+
+    private fun shapes(canvas: Canvas) {
+        val r = height * EMBLEM
         when (scene) {
             SkyScene.CLEAR -> body(canvas)
             SkyScene.PARTLY_CLOUDY -> {
@@ -335,7 +369,6 @@ class SkyView(context: Context) : View(context) {
                 cloud(canvas, CLOUD_STORM, 0f, -0.1f, 1f)
             }
         }
-        canvas.restore()
     }
 
     /** The sun by day, the moon by night: whichever is up behind the cloud, if there is one. */
@@ -359,7 +392,8 @@ class SkyView(context: Context) : View(context) {
      * thing in a dark room, and the light type laid over them would be lost.
      */
     private fun tone(colour: Int) {
-        emblemPaint.color = colour
+        // Opaque, so where a cloud's shadow overlaps the sun's it stays one shadow, not two.
+        emblemPaint.color = if (casting) shadowColour else colour
         if (Theme.night) emblemPaint.alpha = 0x80
     }
 
@@ -376,6 +410,8 @@ class SkyView(context: Context) : View(context) {
     private companion object {
         /** The emblem's radius, as a fraction of the screen's height. */
         const val EMBLEM = 0.40f
+        /** How much darker than the paper the emblem's shadow is. */
+        const val SHADE = 0.92f
         val MOON = Color.rgb(0xF6, 0xF2, 0xE2)
         /** A fair-weather cloud, lighter than the paper so it reads against the sun behind it. */
         val CLOUD_LIGHT = Color.rgb(0xFA, 0xF9, 0xF6)
@@ -394,6 +430,7 @@ class SkyView(context: Context) : View(context) {
             skyMinute = minuteOfDay
             skyScene = scene
             val palette = washed(DayPalette.at(minuteOfDay), scene)
+            shadowColour = wash(palette.middle, 0f, SHADE)
             sky.shader = LinearGradient(
                 0f, 0f, 0f, height.toFloat(),
                 intArrayOf(palette.top, palette.middle, palette.bottom),

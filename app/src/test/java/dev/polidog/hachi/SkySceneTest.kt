@@ -63,4 +63,16 @@ class SkySceneTest {
             }
         }
     }
+
+    @Test
+    fun theShadowFollowsTheSun() {
+        val morning = castAt(7 * 60)
+        val noon = castAt(12 * 60)
+        val evening = castAt(17 * 60 + 30)
+        // Always down and to the left, onto the page, and steeper as the day goes on.
+        for (cast in listOf(morning, noon, evening)) assertTrue(cast.angle in 90f..180f)
+        assertTrue(morning.angle > noon.angle && noon.angle > evening.angle)
+        assertTrue(noon.stretch < morning.stretch && noon.stretch < evening.stretch)
+        assertTrue(noon.reach < morning.reach)
+    }
 }

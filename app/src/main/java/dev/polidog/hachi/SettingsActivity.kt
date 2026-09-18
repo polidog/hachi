@@ -244,6 +244,15 @@ class SettingsActivity : Activity() {
                 ) { host.settings.setSecret("yahooAppId", it.trim()) }
             },
         ),
+        getString(R.string.settings_section_calendar) to Item(
+            title = getString(R.string.settings_calendars),
+            summary = {
+                val hidden = settings.hiddenCalendars.size
+                if (hidden == 0) getString(R.string.settings_calendars_all)
+                else getString(R.string.settings_calendars_hidden, hidden)
+            },
+            detail = { host, pane -> host.calendarPane(pane) },
+        ),
         getString(R.string.settings_section_house) to Item(
             title = getString(R.string.settings_ha_url),
             summary = { settings.homeAssistantUrl.ifBlank { getString(R.string.settings_unset) } },
@@ -448,6 +457,55 @@ class SettingsActivity : Activity() {
             },
             LinearLayout.LayoutParams(-2, dp(48)).apply { topMargin = dp(14); gravity = Gravity.END },
         )
+    }
+
+    /** One row per synced calendar; tapping flips whether it is shown. */
+    private fun calendarPane(pane: LinearLayout) {
+        pane.addView(paneTitle(getString(R.string.settings_calendars)))
+        pane.addView(paneHelp(getString(R.string.settings_calendars_help)))
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        pane.addView(rows, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        if (!calendarPermitted(this)) {
+            rows.addView(resultLine(getString(R.string.calendar_no_permission), null))
+            return
+        }
+        thread {
+            val calendars = listCalendars(this)
+            main.post {
+                fun draw() {
+                    rows.removeAllViews()
+                    val hidden = settings.hiddenCalendars
+                    for ((id, name) in calendars) {
+                        val on = id !in hidden
+                        rows.addView(LinearLayout(this).apply {
+                            gravity = Gravity.CENTER_VERTICAL
+                            setPadding(0, dp(9), 0, dp(9))
+                            addView(View(context).apply {
+                                background = GradientDrawable().apply {
+                                    cornerRadius = dp(4).toFloat()
+                                    if (on) setColor(ACCENT) else setStroke(dp(2), HAIRLINE_STRONG)
+                                }
+                            }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(14) })
+                            addView(TextView(context).apply {
+                                text = name
+                                textSize = 15f
+                                typeface = if (on) DISPLAY else null
+                                setTextColor(if (on) TEXT else MUTED)
+                            })
+                            isSelected = on
+                            contentDescription = name
+                            setOnClickListener {
+                                settings.hiddenCalendars = if (on) hidden + id else hidden - id
+                                draw()
+                                drawList() // the summary in the left-hand list just changed
+                            }
+                        })
+                    }
+                    if (calendars.isEmpty()) rows.addView(resultLine(getString(R.string.calendar_none), null))
+                }
+                draw()
+            }
+        }
     }
 
     /** Place search: type a name, pick one of the hits, and its coordinates are what gets stored. */

@@ -73,12 +73,33 @@ class PagerView(context: Context) : ViewGroup(context) {
                 dragging = false
                 if (!scroller.isFinished) scroller.abortAnimation()
             }
-            MotionEvent.ACTION_MOVE ->
+            MotionEvent.ACTION_MOVE -> {
                 // Only steal the gesture once it is clearly a horizontal drag, so taps and any
-                // vertical scrolling inside a page still reach the page itself.
-                if (abs(event.x - downX) > touchSlop) dragging = true
+                // vertical scrolling inside a page still reach the page itself. A row inside the
+                // page that can still scroll that way keeps the drag; the page turns at its end.
+                val dx = event.x - downX
+                if (abs(dx) > touchSlop && !canScroll(this, -dx.toInt(), event.x.toInt(), event.y.toInt())) {
+                    dragging = true
+                    lastX = event.x
+                }
+            }
         }
         return dragging
+    }
+
+    /** Whether some view under ([x], [y]), in [view]'s coordinates, can still scroll by [dx]. */
+    private fun canScroll(view: View, dx: Int, x: Int, y: Int): Boolean {
+        if (view !== this && view.canScrollHorizontally(dx)) return true
+        if (view !is ViewGroup) return false
+        for (i in view.childCount - 1 downTo 0) {
+            val child = view.getChildAt(i)
+            val cx = x + view.scrollX - child.left
+            val cy = y + view.scrollY - child.top
+            if (child.visibility == VISIBLE && cx in 0 until child.width && cy in 0 until child.height &&
+                canScroll(child, dx, cx, cy)
+            ) return true
+        }
+        return false
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

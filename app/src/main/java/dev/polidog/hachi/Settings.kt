@@ -63,6 +63,16 @@ class Settings(context: Context) {
         set("weatherLon", place.longitude.toString())
     }
 
+    /**
+     * Calendars left off the wall and out of the model's answers, by provider id.
+     *
+     * Stored as the ones hidden rather than the ones shown, so a calendar added to the account later
+     * turns up on its own instead of silently staying away.
+     */
+    var hiddenCalendars: Set<Long>
+        get() = get("hiddenCalendars").split(",").mapNotNull { it.toLongOrNull() }.toSet()
+        set(value) = set("hiddenCalendars", value.joinToString(","))
+
     /** Yahoo! Japan application id for the rain radar; blank simply disables that half. */
     val yahooAppId get() = secret("yahooAppId")
 

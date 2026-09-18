@@ -60,6 +60,7 @@ fun readCalendar(
     // list read out loud is where saying it twice actually shows. Same title at the same moment is
     // the same appointment; the calendar it is credited to is the first one seen.
     val seen = HashSet<String>()
+    val hidden = Settings(context).hiddenCalendars
     val cursor = try {
         context.contentResolver.query(uri, PROJECTION, null, null, ORDER)
     } catch (e: Exception) {
@@ -68,6 +69,7 @@ fun readCalendar(
     } ?: return null
     cursor.use {
         while (events.size < limit && it.moveToNext()) {
+            if (it.getLong(6) in hidden) continue
             if (!seen.add("${it.getString(0)}|${it.getLong(1)}|${it.getLong(2)}")) continue
             events += calendarEvent(
                 title = it.getString(0),
@@ -81,6 +83,18 @@ fun readCalendar(
         }
     }
     return events
+}
+
+/** Every calendar the device syncs, as (id, name), for choosing which ones Hachi reads. */
+fun listCalendars(context: Context): List<Pair<Long, String>> = try {
+    context.contentResolver.query(
+        CalendarContract.Calendars.CONTENT_URI,
+        arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME),
+        null, null, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+    )?.use { c -> buildList { while (c.moveToNext()) add(c.getLong(0) to c.getString(1).orEmpty()) } }.orEmpty()
+} catch (e: Exception) {
+    Log.w("Hachi", "calendars unreadable", e)
+    emptyList()
 }
 
 /** The window to ask for, as the provider wants it: epoch millis, from midnight, end exclusive. */
@@ -148,5 +162,6 @@ private val PROJECTION = arrayOf(
     CalendarContract.Instances.ALL_DAY,
     CalendarContract.Instances.EVENT_LOCATION,
     CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
+    CalendarContract.Instances.CALENDAR_ID,
 )
 private const val ORDER = "${CalendarContract.Instances.BEGIN} ASC"

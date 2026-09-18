@@ -63,3 +63,24 @@ internal fun wash(colour: Int, desaturate: Float, darken: Float): Int {
         ((value + (grey - value) * desaturate) * darken).toInt().coerceIn(0, 255)
     return (0xFF shl 24) or (channel(r) shl 16) or (channel(g) shl 8) or channel(b)
 }
+
+/**
+ * Where the emblem's shadow falls: [angle] in screen degrees (clockwise from right, so 90 is
+ * straight down), [stretch] along that line, and [reach], how far it is carried off, in emblem radii.
+ */
+class Cast(val angle: Float, val stretch: Float, val reach: Float)
+
+/**
+ * The shadow at [minuteOfDay]: always a long diagonal down to the left, onto the page -- the emblem
+ * sits on the right edge, so a shadow thrown right would only leave the screen. Within that it
+ * follows the sun: flattest and longest in the morning, shortest at noon, steepening toward evening.
+ * ponytail: the sun's arc is faked between [DAWN] and [DUSK]; take the forecast's sunrise and sunset
+ * if a winter afternoon's shadow ever looks too short.
+ */
+fun castAt(minuteOfDay: Int): Cast {
+    val dawn = DAWN.hour * 60 + DAWN.minute
+    val dusk = DUSK.hour * 60 + DUSK.minute
+    val t = ((minuteOfDay - dawn).toFloat() / (dusk - dawn)).coerceIn(0f, 1f)
+    val height = 1f - kotlin.math.abs(2f * t - 1f)
+    return Cast(125f + 30f * (1f - 2f * t), 2.4f - 0.9f * height, 0.6f + 1.0f * (1f - height))
+}

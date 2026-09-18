@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">ハチ</string>
-    <string name="action_devices">デバイス操作</string>
     <string name="settings_title">設定</string>
     <string name="settings_close">閉じる</string>
     <string name="settings_api_key">Gemini API キー</string>
@@ -134,4 +133,12 @@
     <string name="calendar_no_permission">カレンダーへのアクセスを許可すると予定が出ます。</string>
     <string name="calendar_previous">前の月</string>
     <string name="calendar_next">次の月</string>
+    <string name="house_stat_on">稼働</string>
+    <string name="house_stat_devices">機器</string>
+    <string name="house_open_room">開く</string>
+    <string name="settings_section_calendar">カレンダー</string>
+    <string name="settings_calendars">表示するカレンダー</string>
+    <string name="settings_calendars_all">すべて</string>
+    <string name="settings_calendars_hidden">%d 件を隠しています</string>
+    <string name="settings_calendars_help">チェックしたカレンダーだけが壁と会話に出ます。あとから増えたカレンダーは自動で出ます。</string>
 </resources>

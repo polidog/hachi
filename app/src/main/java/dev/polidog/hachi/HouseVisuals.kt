@@ -4,13 +4,17 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorFilter
 import android.graphics.CornerPathEffect
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PixelFormat
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.view.MotionEvent
 import android.view.View
 import dev.polidog.hachi.tools.ClimateState
@@ -21,6 +25,7 @@ import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.round
 import kotlin.math.sin
+import kotlin.random.Random
 
 /**
  * Where a drag around the dial lands: [fraction] of the way from [min] to [max], snapped to [step].
@@ -32,6 +37,178 @@ internal fun dialValue(fraction: Float, min: Double, max: Double, step: Double):
     val raw = min + (max - min) * fraction.coerceIn(0f, 1f)
     val snapped = if (step > 0) min + round((raw - min) / step) * step else raw
     return (round(snapped * 1000) / 1000).coerceIn(min, max)
+}
+
+/** (deep, light): the top and bottom of the dial, and the lit and unlit fan segments. */
+internal fun modeTones(mode: String): Pair<Int, Int> = when (mode) {
+    "cool", "dry" -> Color.rgb(0xA9, 0xB9, 0xC4) to Color.rgb(0xE0, 0xE6, 0xEA)
+    "heat" -> Color.rgb(0xD9, 0xB0, 0x98) to Color.rgb(0xF1, 0xE3, 0xDA)
+    "off" -> Color.rgb(0xCF, 0xCD, 0xC7) to Color.rgb(0xEB, 0xE9, 0xE4)
+    else -> Color.rgb(0xA8, 0xB4, 0xA3) to Color.rgb(0xDD, 0xE2, 0xD8)
+}
+
+internal fun blend(from: Int, to: Int, t: Float) = Color.rgb(
+    (Color.red(from) + (Color.red(to) - Color.red(from)) * t).toInt(),
+    (Color.green(from) + (Color.green(to) - Color.green(from)) * t).toInt(),
+    (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * t).toInt(),
+)
+
+/**
+ * A room card's face: mountains and a river across the top, fading into the card the way the
+ * reference's photo does.
+ *
+ * There is no photo of the room, so the picture is drawn: a hazy far range, a nearer one, a valley
+ * with a river winding out of it, a hill in front. Each layer is a gradient -- mist gathers at the
+ * foot of every range -- and [seed] shapes the ridges and the river, so each room keeps its own
+ * view from one day to the next.
+ */
+internal class RoomBackdrop(context: Context, private val seed: Int) : CardFace(context) {
+    override fun scene(canvas: Canvas, w: Float, h: Float) {
+        val random = Random(seed)
+        fun between(from: Float, to: Float) = from + random.nextFloat() * (to - from)
+
+        val horizon = h * 0.42f
+        val foot = h * 0.72f
+        val haze = c(Color.rgb(0xEE, 0xF0, 0xEA))
+        fun fill(top: Float, bottom: Float, from: Int, to: Int) {
+            paint.shader = LinearGradient(0f, top, 0f, bottom, c(from), to, Shader.TileMode.CLAMP)
+        }
+
+        // Sky, and the light coming over the range.
+        fill(0f, horizon, Color.rgb(0x9F, 0xBD, 0xCE), haze)
+        canvas.drawRect(0f, 0f, w, foot, paint)
+        paint.shader = RadialGradient(w * between(0.6f, 0.9f), h * 0.1f, w * 0.22f,
+            c(Color.argb(0x66, 0xFF, 0xFB, 0xEE)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, w, foot, paint)
+
+        // Two ranges, the far one paler: each ridge a run of peaks smoothed through their midpoints.
+        fun range(base: Float, highest: Float, peaks: Int, colour: Int) {
+            path.reset()
+            path.moveTo(0f, base)
+            var x = 0f
+            var y = between(highest, base)
+            path.lineTo(0f, y)
+            for (i in 1..peaks) {
+                val nx = w * i / peaks
+                val ny = between(highest, base - (base - highest) * 0.25f)
+                path.quadTo(x, y, (x + nx) / 2, (y + ny) / 2)
+                x = nx; y = ny
+            }
+            path.lineTo(w, y)
+            path.lineTo(w, base)
+            path.close()
+            fill(highest, base, colour, blend(c(colour), haze, 0.55f))
+            canvas.drawPath(path, paint)
+        }
+        range(horizon + h * 0.04f, h * 0.10f, 5, Color.rgb(0x86, 0x9E, 0xAE))
+        range(horizon + h * 0.08f, h * 0.22f, 4, Color.rgb(0x5F, 0x80, 0x6B))
+
+        // The valley floor, and the river coming out of it toward us, widening.
+        fill(horizon, foot, Color.rgb(0x86, 0xA0, 0x74), SURFACE)
+        canvas.drawRect(0f, horizon + h * 0.06f, w, foot, paint)
+        val source = w * between(0.45f, 0.75f)
+        val mouth = w * between(0.2f, 0.6f)
+        val top = horizon + h * 0.06f
+        path.reset()
+        path.moveTo(source - w * 0.01f, top)
+        path.cubicTo(source - w * 0.12f, top + h * 0.08f, mouth + w * 0.15f, foot - h * 0.12f, mouth - w * 0.14f, foot)
+        path.lineTo(mouth + w * 0.14f, foot)
+        path.cubicTo(mouth + w * 0.25f, foot - h * 0.12f, source - w * 0.02f, top + h * 0.08f, source + w * 0.01f, top)
+        path.close()
+        fill(top, foot, Color.rgb(0xB2, 0xD0, 0xDE), SURFACE)
+        canvas.drawPath(path, paint)
+
+        // A hill in front, off to one side, so the river has a bank to come round.
+        val left = random.nextBoolean()
+        path.reset()
+        path.moveTo(if (left) 0f else w, foot)
+        path.lineTo(if (left) 0f else w, horizon + h * 0.02f)
+        path.cubicTo(w * (if (left) 0.18f else 0.82f), horizon, w * (if (left) 0.3f else 0.7f), horizon + h * 0.12f,
+            w * (if (left) 0.46f else 0.54f), foot)
+        path.close()
+        fill(horizon, foot, Color.rgb(0x4E, 0x72, 0x4A), SURFACE)
+        canvas.drawPath(path, paint)
+
+        fade(canvas, w, h * 0.52f, foot)
+    }
+}
+
+/**
+ * A device card's face: the thing's own light, pooled at the top of the card and fading into it --
+ * lamplight when a light is on, the air conditioner's colour when it runs, only a faint wash when off.
+ */
+internal class DeviceBackdrop(
+    context: Context,
+    tones: Pair<Int, Int>,
+    private val lit: Boolean,
+    /** How far down the card the glyph stands, as a fraction of its height: the light pools there. */
+    private val centre: Float = 0.26f,
+) : CardFace(context) {
+    private val deep = c(tones.first)
+    private val light = c(tones.second)
+
+    override fun scene(canvas: Canvas, w: Float, h: Float) {
+        val foot = h * (centre + 0.36f)
+        paint.shader = LinearGradient(0f, 0f, 0f, foot, light, SURFACE, Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, w, foot, paint)
+        // Only something that is on gives off light; a grey pool round an off switch reads as a smudge.
+        if (lit) {
+            paint.shader = RadialGradient(w / 2, h * centre, w * 0.62f, deep, Color.TRANSPARENT, Shader.TileMode.CLAMP)
+            canvas.drawRect(0f, 0f, w, foot, paint)
+        }
+        fade(canvas, w, h * (centre + 0.14f), foot)
+    }
+}
+
+/** A room with a light on: lamplight, the accent let down. */
+internal val LAMP_TONES = Color.rgb(0xEE, 0xCB, 0x5E) to Color.rgb(0xF8, 0xEE, 0xCC)
+
+/**
+ * The card both faces share: a rounded panel with a picture across its top and a hairline round
+ * the edge. [scene] draws the picture, already clipped to the corners.
+ */
+internal abstract class CardFace(protected val context: Context) : Drawable() {
+    protected val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    protected val path = Path()
+
+    /** By night the picture sinks most of the way into the card, so the wall does not light the room. */
+    protected fun c(colour: Int) = if (Theme.night) blend(colour, SURFACE, 0.72f) else colour
+
+    protected abstract fun scene(canvas: Canvas, w: Float, h: Float)
+
+    /** The lower part of the picture dissolving into the card. */
+    protected fun fade(canvas: Canvas, w: Float, from: Float, to: Float) {
+        paint.shader = LinearGradient(0f, from, 0f, to, Color.TRANSPARENT, SURFACE, Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, w, to + 1, paint)
+        paint.shader = null
+    }
+
+    override fun draw(canvas: Canvas) {
+        val w = bounds.width().toFloat()
+        val h = bounds.height().toFloat()
+        val r = context.dp(RADIUS).toFloat()
+        // The outline below leaves the hairline's alpha on the paint, and a shader is drawn through it.
+        paint.color = Color.BLACK
+        canvas.save()
+        canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
+        path.reset()
+        path.addRoundRect(0f, 0f, w, h, r, r, Path.Direction.CW)
+        canvas.clipPath(path)
+        canvas.drawColor(SURFACE)
+        scene(canvas, w, h)
+        canvas.restore()
+
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = context.dp(1).toFloat()
+        paint.color = HAIRLINE
+        canvas.drawRoundRect(bounds.left + 0.5f, bounds.top + 0.5f, bounds.right - 0.5f, bounds.bottom - 0.5f, r, r, paint)
+        paint.style = Paint.Style.FILL
+    }
+
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
 /**
@@ -106,7 +283,7 @@ internal class ClimateDial(
     private fun drawFan(canvas: Canvas) {
         if (modes.isEmpty()) return
         val each = span / modes.size
-        val (deep, light) = tones(mode)
+        val (deep, light) = modeTones(mode)
         modes.forEachIndexed { index, it ->
             val on = it == mode
             val from = -span / 2 + index * each + 1.2f
@@ -138,7 +315,7 @@ internal class ClimateDial(
     }
 
     private fun drawDial(canvas: Canvas) {
-        val (deep, light) = tones(mode)
+        val (deep, light) = modeTones(mode)
         fill.shader = LinearGradient(0f, cy - radius, 0f, cy + radius, deep, light, Shader.TileMode.CLAMP)
         canvas.drawCircle(cx, cy, radius, fill)
 
@@ -229,20 +406,6 @@ internal class ClimateDial(
         val index = ((angle + span / 2) / (span / modes.size)).toInt()
         return if (angle < -span / 2 || index !in modes.indices) -1 else index
     }
-
-    /** (deep, light): the top and bottom of the dial, and the lit and unlit fan segments. */
-    private fun tones(mode: String): Pair<Int, Int> = when (mode) {
-        "cool", "dry" -> Color.rgb(0xA9, 0xB9, 0xC4) to Color.rgb(0xE0, 0xE6, 0xEA)
-        "heat" -> Color.rgb(0xD9, 0xB0, 0x98) to Color.rgb(0xF1, 0xE3, 0xDA)
-        "off" -> Color.rgb(0xCF, 0xCD, 0xC7) to Color.rgb(0xEB, 0xE9, 0xE4)
-        else -> Color.rgb(0xA8, 0xB4, 0xA3) to Color.rgb(0xDD, 0xE2, 0xD8)
-    }
-
-    private fun blend(from: Int, to: Int, t: Float) = Color.rgb(
-        (Color.red(from) + (Color.red(to) - Color.red(from)) * t).toInt(),
-        (Color.green(from) + (Color.green(to) - Color.green(from)) * t).toInt(),
-        (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * t).toInt(),
-    )
 
     private companion object {
         /** Degrees either side of the top that the needle can reach; the bottom is left clear. */
