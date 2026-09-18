@@ -49,6 +49,17 @@ class HouseTest {
         assertTrue(ac.isOn)
     }
 
+    @Test fun `a room's air is read off its sensors`() {
+        val sensor = liveContext(answer).first { it.name == "居間の温度" }
+        assertTrue(sensor.measures("temperature"))
+        assertFalse(sensor.measures("humidity"))
+        assertTrue(Device("寝室の湿度", "sensor", "48", "寝室", unit = "%").measures("humidity"))
+        assertTrue(Device("Bedroom", "sensor", "48", "寝室", unit = "%", kind = "humidity").measures("humidity"))
+        // A battery is a percentage too, and an unavailable thermometer reads nothing.
+        assertFalse(Device("電池", "sensor", "80", "寝室", unit = "%", kind = "battery").measures("humidity"))
+        assertFalse(Device("温度", "sensor", "unavailable", "寝室", unit = "°C").measures("temperature"))
+    }
+
     @Test fun `an answer that is not the house leaves no tiles behind`() {
         assertTrue(liveContext("").isEmpty())
         assertTrue(liveContext("Error calling tool: MatchFailedError").isEmpty())

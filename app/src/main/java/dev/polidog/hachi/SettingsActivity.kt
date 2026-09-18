@@ -282,6 +282,22 @@ class SettingsActivity : Activity() {
                 ) { host.settings.setSecret("homeAssistantToken", it.trim()) }
             },
         ),
+        null to Item(
+            title = getString(R.string.settings_typesafe_key),
+            summary = {
+                val key = settings.typesafeKey
+                if (key.isBlank()) getString(R.string.settings_unset) else "\u2022\u2022\u2022\u2022" + key.takeLast(4)
+            },
+            detail = { host, pane ->
+                host.textPane(
+                    pane,
+                    getString(R.string.settings_typesafe_key),
+                    getString(R.string.settings_typesafe_key_help),
+                    host.settings.typesafeKey,
+                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+                ) { host.settings.setSecret("typesafeKey", it.trim()) }
+            },
+        ),
         getString(R.string.settings_section_spend) to Item(
             title = getString(R.string.settings_daily_cap),
             summary = {

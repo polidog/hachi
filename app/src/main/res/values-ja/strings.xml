@@ -62,6 +62,8 @@
     <string name="settings_ha_url_help">Home Assistant の場所です。例: http://homeassistant.local:8123。ここの MCP サーバを通して家の機器と音楽を操作します。エンドポイントの場所が違う場合は URL を最後まで入れてください。</string>
     <string name="settings_ha_token">Home Assistant のトークン</string>
     <string name="settings_ha_token_help">Home Assistant のプロフィール画面で発行する長期アクセストークンです。暗号化して保存します。Assist に公開した entity だけが見えます。</string>
+    <string name="settings_typesafe_key">TypeSafe の API キー</string>
+    <string name="settings_typesafe_key_help">Home Assistant が聞き取った名前を知らないとき（「書斎エアコン」を「書斎のエアコン」と言ったときなど）、どの機器のことかを Jev に選ばせます。名前が外れたときだけ使います。暗号化して保存します。空欄ならこの機能なしで動きます。</string>
     <string name="settings_section_weather">天気</string>
     <string name="settings_place">地域</string>
     <string name="settings_place_help">天気を取得する場所を検索して選びます。選んだ地点の緯度経度を保存します。</string>
@@ -122,6 +124,7 @@
     <string name="house_no_temperature">温度設定に対応していません。</string>
     <string name="house_mode">運転モード</string>
     <string name="house_room">室温</string>
+    <string name="house_humidity">湿度</string>
     <string name="house_decrease">%1$sを下げる</string>
     <string name="house_increase">%1$sを上げる</string>
     <string name="house_action_failed">操作を反映できませんでした。もう一度お試しください。</string>

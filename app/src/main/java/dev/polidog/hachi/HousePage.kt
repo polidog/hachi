@@ -18,7 +18,8 @@ import android.widget.TextView
 import java.text.NumberFormat
 
 /**
- * Rooms → devices → controls. Selecting a row never sends a command to the house.
+ * Rooms → devices → controls. A device that is only on or off is switched from its card; the
+ * rest open a page of controls.
  *
  * A page of the pager, swiped to like the weather.
  */
@@ -80,7 +81,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         when {
             device != null -> detail(device)
             area != null -> deviceList(devices.filter { it.area == area })
-            else -> rooms(devices)
+            else -> rooms(devices, house.devices)
         }
     }
 
@@ -107,8 +108,10 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
     }
 
     /** The rooms as a row of cards, scrolled sideways: six of them will not share this screen. */
-    private fun rooms(devices: List<Device>) =
-        carousel(devices.groupBy { it.area }.map { (room, members) -> roomCard(room, members) }, 280)
+    private fun rooms(devices: List<Device>, everything: List<Device>) =
+        carousel(devices.groupBy { it.area }.map { (room, members) ->
+            roomCard(room, members, everything.filter { it.area == room })
+        }, 280)
 
     /**
      * A row of cards taking whatever height the page has, so they never push it into a scroll;
@@ -128,9 +131,12 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
      * A room as the reference's profile card: a picture fading into the card, the room's mark
      * standing on its edge, the name, what is in it, and the numbers in a row with rules between.
      */
-    private fun roomCard(room: String, members: List<Device>) = FrameLayout(context).apply {
+    private fun roomCard(room: String, members: List<Device>, everything: List<Device>) = FrameLayout(context).apply {
         val on = members.count { it.isOn }
-        val indoor = members.firstNotNullOfOrNull { it.climate?.current?.let { t -> degrees(t, it) } }
+        // A thermometer in the room, or else what the air conditioner feels.
+        val indoor = everything.firstOrNull { it.measures("temperature") }?.let { number(it.state.toDouble()) + (it.unit ?: "°") }
+            ?: members.firstNotNullOfOrNull { it.climate?.current?.let { t -> degrees(t, it) } }
+        val humidity = everything.firstOrNull { it.measures("humidity") }?.let { number(it.state.toDouble()) + "%" }
         val name = roomName(room)
         background = RippleDrawable(PRESS, RoomBackdrop(context, room.hashCode()), null)
 
@@ -138,11 +144,23 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(context.dp(18), 0, context.dp(14), context.dp(14))
-            addView(FrameLayout(context).apply {
-                background = pill(context.dp(26).toFloat(), SURFACE)
-                addView(HouseGlyph(context, "room", if (on > 0) ACCENT_INK else MUTED),
-                    LayoutParams(context.dp(24), context.dp(24), Gravity.CENTER))
-            }, LinearLayout.LayoutParams(context.dp(52), context.dp(52)).apply { bottomMargin = context.dp(10) })
+            // The mark, and beside it the room's air when something in it is measuring.
+            addView(LinearLayout(context).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(FrameLayout(context).apply {
+                    background = pill(context.dp(26).toFloat(), SURFACE)
+                    addView(HouseGlyph(context, "room", if (on > 0) ACCENT_INK else MUTED),
+                        LayoutParams(context.dp(24), context.dp(24), Gravity.CENTER))
+                }, LinearLayout.LayoutParams(context.dp(52), context.dp(52)).apply { marginEnd = context.dp(4) })
+                if (indoor != null) {
+                    addView(rule())
+                    addView(figure(indoor, context.getString(R.string.house_room)))
+                }
+                if (humidity != null) {
+                    addView(rule())
+                    addView(figure(humidity, context.getString(R.string.house_humidity)))
+                }
+            }, LinearLayout.LayoutParams(WRAP, WRAP).apply { bottomMargin = context.dp(10) })
             addView(label(name, 19f).apply { maxLines = 1; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) })
             addView(label(members.joinToString("・") { it.name }, 11f, MUTED).apply {
                 maxLines = 1
@@ -154,10 +172,6 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
                 addView(figure(on.toString(), context.getString(R.string.house_stat_on), if (on > 0) ACCENT_INK else TEXT))
                 addView(rule())
                 addView(figure(members.size.toString(), context.getString(R.string.house_stat_devices)))
-                if (indoor != null) {
-                    addView(rule())
-                    addView(figure(indoor, context.getString(R.string.house_room)))
-                }
                 addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
                 addView(label(context.getString(R.string.house_open_room), 13f, INK).apply {
                     typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -193,6 +207,9 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
      * and what it is doing now. Opening it is still the only thing a tap does.
      */
     private fun deviceCard(device: Device) = FrameLayout(context).apply {
+        // Only a thermostat has more to it than on and off. A state the house does not know still
+        // opens, so the page can offer both presses instead of guessing one.
+        val switch = device.domain != "climate" && device.state != "unknown"
         background = RippleDrawable(PRESS, backdrop(device), null)
         addView(HouseGlyph(context, device.domain, if (device.isOn) ACCENT_INK else MUTED),
             LayoutParams(context.dp(52), context.dp(52), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
@@ -205,9 +222,10 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
             addView(LinearLayout(context).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, context.dp(12), 0, 0)
-                addView(label(state(device), 12f, if (device.isOn) ACCENT_INK else MUTED).apply { maxLines = 1 },
+                val status = if (house.busy(device)) context.getString(R.string.house_sending) else state(device)
+                addView(label(status, 12f, if (device.isOn) ACCENT_INK else MUTED).apply { maxLines = 1 },
                     LinearLayout.LayoutParams(0, WRAP, 1f))
-                addView(label("›", 18f, INK).apply {
+                if (!switch) addView(label("›", 18f, INK).apply {
                     gravity = Gravity.CENTER
                     background = pill(context.dp(18).toFloat(), TEXT)
                 }, LinearLayout.LayoutParams(context.dp(36), context.dp(36)))
@@ -215,7 +233,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }, LayoutParams(FILL, WRAP, Gravity.BOTTOM))
         contentDescription = "${device.name}, ${state(device)}"
         isFocusable = true
-        setOnClickListener { selected = device.key; navigate() }
+        setOnClickListener { if (switch) house.toggle(device) else { selected = device.key; navigate() } }
     }
 
     /** The light a device gives off on its card: lamplight, the air conditioner's mode, or none. */
@@ -397,8 +415,9 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         })
     }
 
-    private fun degrees(value: Double, device: Device) =
-        NumberFormat.getNumberInstance().apply { maximumFractionDigits = 2 }.format(value) + (device.climate?.unit ?: "°")
+    private fun degrees(value: Double, device: Device) = number(value) + (device.climate?.unit ?: "°")
+
+    private fun number(value: Double) = NumberFormat.getNumberInstance().apply { maximumFractionDigits = 2 }.format(value)
 
     /**
      * A pill: outlined for the small steps, filled dark for the one press a page is for -- the same

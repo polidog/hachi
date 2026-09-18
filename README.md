@@ -32,7 +32,7 @@ JDK は mise で管理している（`mise.toml`）。ABI は `armeabi-v7a` の�
 API キーは端末の設定画面から入れる。長い文字列は開発機から流し込める:
 
 ```sh
-adb shell am broadcast -a dev.polidog.hachi.SET -e name geminiKey -e value '...'
+adb shell am broadcast -n dev.polidog.hachi/.DebugSettingsReceiver -a dev.polidog.hachi.SET -e name geminiKey -e value '...'
 ```
 
 ログは全ファイル共通で `Hachi` タグ:

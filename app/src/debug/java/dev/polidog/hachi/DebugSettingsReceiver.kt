@@ -50,7 +50,7 @@ class DebugSettingsReceiver : BroadcastReceiver() {
     }
 
     private companion object {
-        val SECRETS = setOf("geminiKey", "yahooAppId", "homeAssistantToken", "immichKey")
+        val SECRETS = setOf("geminiKey", "yahooAppId", "homeAssistantToken", "immichKey", "typesafeKey")
         val PLAIN = setOf(
             "model", "voice", "silenceTimeout", "dailyCap",
             "weatherPlace", "weatherLat", "weatherLon",

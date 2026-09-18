@@ -22,6 +22,9 @@ data class Device(
     /** What a thermostat is set to, when it is one. */
     val setpoint: Double? = null,
     val climate: ClimateState? = null,
+    /** A sensor's `unit_of_measurement` and `device_class`, when the house gives them. */
+    val unit: String? = null,
+    val kind: String? = null,
 )
 
 data class DeviceKey(val area: String, val domain: String, val name: String)
@@ -32,6 +35,16 @@ val Device.available get() = state != "unavailable"
 val Device.isOn: Boolean
     get() = if (domain == "climate") state !in setOf("off", "unknown", "unavailable")
     else state == "on" || state == "open"
+
+/**
+ * Whether this is a sensor reading [what] (`temperature` or `humidity`). The class is not always
+ * listed, so a thermometer is also known by its unit, and a hygrometer by its name.
+ */
+fun Device.measures(what: String) = domain == "sensor" && state.toDoubleOrNull() != null &&
+    (kind == what || kind == null && when (what) {
+        "temperature" -> unit == "°C" || unit == "°F"
+        else -> unit == "%" && ("湿度" in name || "humid" in name.lowercase())
+    })
 
 /** The domains a tile can work. Everything else the house lists is for the conversation to read. */
 private val TILES = setOf("light", "switch", "fan", "input_boolean", "cover", "climate")
@@ -244,6 +257,8 @@ fun liveContext(answer: String): List<Device> {
                 fields["state"].orEmpty(),
                 fields["areas"].orEmpty(),
                 fields["temperature"]?.toDoubleOrNull()?.takeIf { it.isFinite() },
+                unit = fields["unit_of_measurement"],
+                kind = fields["device_class"],
             )
         }
         fields = mutableMapOf()
@@ -273,5 +288,5 @@ fun liveContext(answer: String): List<Device> {
 /** How far the fields of one item are indented; anything deeper belongs to a nested block. */
 private const val FIELD_INDENT = 2
 
-/** The attributes worth keeping off an entity: what a thermostat is set to. */
-private val NESTED = setOf("temperature")
+/** The attributes worth keeping off an entity: what a thermostat is set to, what a sensor reads. */
+private val NESTED = setOf("temperature", "unit_of_measurement", "device_class")

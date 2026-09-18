@@ -1,6 +1,7 @@
 package dev.polidog.hachi.tools
 
 import android.util.Log
+import dev.polidog.hachi.Device
 import dev.polidog.hachi.Settings
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -127,9 +128,54 @@ class McpServer(private val endpoint: String, private val token: String) {
 }
 
 /** One tool the house offers. The declaration is the server's, only reshaped for Gemini. */
-class McpTool(private val server: McpServer, override val declaration: JSONObject) : Tool {
+class McpTool(
+    private val server: McpServer,
+    override val declaration: JSONObject,
+    /** Asked once the house has refused a name it does not have; null leaves the refusal as it is. */
+    private val rename: ((JSONObject) -> Device?)? = null,
+) : Tool {
     override val name: String = declaration.optString("name")
-    override fun run(args: JSONObject): JSONObject = server.call(name, args)
+    /** The sweep last held back; the same one asked again means the user said yes, all of them. */
+    private var held: String? = null
+
+    override fun run(args: JSONObject): JSONObject {
+        if (sweeps(name, args) && held != args.toString()) {
+            held = args.toString()
+            Log.i("Hachi", "house: held back a sweep $name $args")
+            return failure(SWEEP_HELD)
+        }
+        held = null
+        val result = server.call(name, args)
+        if (!result.has("error") || args.optString("name").isBlank()) return result
+        val meant = rename?.invoke(args) ?: return result
+        Log.i("Hachi", "house: \"${args.optString("name")}\" -> \"${meant.name}\"")
+        return server.call(name, renamed(args, meant))
+    }
+}
+
+private val SWEEPING = listOf("HassTurnOn", "HassTurnOff", "HassLightSet", "HassSetPosition")
+
+const val SWEEP_HELD = "Not done: with no name, area or floor this would switch every such device in " +
+    "the house. The start of the request was probably not heard. Ask the user which room they meant; " +
+    "only if they say all of them, call again with exactly the same arguments."
+
+/**
+ * Whether [args] reach every device of a kind: "書斎の照明を消して" heard as "照明を消して" comes
+ * through as `{domain: [light]}`, and the house turns off every light it has.
+ */
+fun sweeps(tool: String, args: JSONObject): Boolean =
+    SWEEPING.any { tool.endsWith(it) } &&
+        listOf("name", "area", "floor").all { args.optString(it).isBlank() }
+
+/**
+ * [args] pointed at [device] -- said as fully as a tile says it, since an air conditioner is both a
+ * climate and a switch entity under one name and the name alone comes back DUPLICATE_NAME. What the
+ * model already said about where and what kind is kept.
+ */
+fun renamed(args: JSONObject, device: Device): JSONObject = JSONObject(args.toString()).apply {
+    put("name", device.name)
+    if (!has("domain")) put("domain", JSONArray().put(device.domain))
+    if (!has("area") && device.area.isNotBlank()) put("area", device.area)
 }
 
 /**

@@ -3,6 +3,7 @@ package dev.polidog.hachi.tools
 import android.content.Context
 import android.util.Log
 import dev.polidog.hachi.Settings
+import dev.polidog.hachi.liveContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -48,7 +49,20 @@ class ToolRegistry(context: Context, settings: Settings) {
 private fun houseTools(settings: Settings): List<Tool> {
     val server = McpServer.from(settings) ?: return emptyList()
     val cached = runCatching { JSONArray(settings.houseTools) }.getOrNull() ?: return emptyList()
-    return mcpDeclarations(cached).map { McpTool(server, it) }
+    val declarations = mcpDeclarations(cached)
+    val live = declarations.map { it.optString("name") }.firstOrNull { it.endsWith("GetLiveContext") }
+    val rename = JevNames.from(settings)?.takeIf { live != null }?.let { jev ->
+        { args: JSONObject ->
+            val devices = liveContext(server.call(live!!, JSONObject()).optString("result"))
+            // A name the house lists was refused for another reason (DUPLICATE_NAME, a wrong area).
+            if (devices.isEmpty() || devices.any { it.name == args.optString("name") }) null
+            // The thermostat over its infrared twin, as a tile does: it is the one that knows the mode.
+            else jev.pick(args, devices)?.let { meant ->
+                devices.filter { it.name == meant }.let { same -> same.firstOrNull { it.domain == "climate" } ?: same.firstOrNull() }
+            }
+        }
+    }
+    return declarations.map { McpTool(server, it, rename) }
 }
 
 /**

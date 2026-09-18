@@ -80,6 +80,9 @@ class Settings(context: Context) {
     val homeAssistantUrl get() = get("homeAssistantUrl")
     val homeAssistantToken get() = secret("homeAssistantToken")
 
+    /** TypeSafe API key for matching a misheard device name; blank leaves the house's refusal as is. */
+    val typesafeKey get() = secret("typesafeKey")
+
     /**
      * The house's tool list as it was last fetched, as the raw `tools` array.
      *
