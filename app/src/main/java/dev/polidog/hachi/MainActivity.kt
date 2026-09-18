@@ -319,6 +319,8 @@ class MainActivity : Activity(), Conversation.Ui {
      */
     override fun onToolUsed(name: String) = refreshHouse()
 
+    override fun onChoices(names: List<String>) = captions.showChoices(names)
+
     @Deprecated("Uses the platform back callback on this API 30 device")
     override fun onBackPressed() {
         if (calendarPage.showing) {

@@ -131,8 +131,8 @@ class McpServer(private val endpoint: String, private val token: String) {
 class McpTool(
     private val server: McpServer,
     override val declaration: JSONObject,
-    /** Asked once the house has refused a name it does not have; null leaves the refusal as it is. */
-    private val rename: ((JSONObject) -> Device?)? = null,
+    /** Asked once the house has refused a name or a room; null leaves the refusal as it is. */
+    private val rename: ((JSONObject) -> Meant?)? = null,
 ) : Tool {
     override val name: String = declaration.optString("name")
     /** The sweep last held back; the same one asked again means the user said yes, all of them. */
@@ -146,12 +146,27 @@ class McpTool(
         }
         held = null
         val result = server.call(name, args)
-        if (!result.has("error") || args.optString("name").isBlank()) return result
+        // A name or a room the house did not take; with neither there is nothing to look for.
+        if (!result.has("error") || listOf("name", "area").all { args.optString(it).isBlank() }) return result
         val meant = rename?.invoke(args) ?: return result
-        Log.i("Hachi", "house: \"${args.optString("name")}\" -> \"${meant.name}\"")
-        return server.call(name, renamed(args, meant))
+        val device = meant.device ?: return if (meant.choices.isEmpty()) result else choose(meant.choices)
+        Log.i("Hachi", "house: \"${args.optString("name")}\" -> \"${device.name}\"")
+        return server.call(name, renamed(args, device))
     }
 }
+
+/** What a refused call was probably after: one device for certain, or else the likely few to ask about. */
+class Meant(val device: Device?, val choices: List<String>)
+
+/**
+ * Asks the user rather than guessing. The same numbered list goes on the screen (see Conversation),
+ * so "2番" is an answer the model can map back to a name.
+ */
+fun choose(choices: List<String>): JSONObject = failure(
+    "Not done: no device matched. These are shown on the screen, numbered: " +
+        choices.mapIndexed { i, it -> "${i + 1}. $it" }.joinToString(", ") +
+        ". Ask the user which one, by number or name, and call again with that name.",
+).put("choices", JSONArray(choices))
 
 private val SWEEPING = listOf("HassTurnOn", "HassTurnOff", "HassLightSet", "HassSetPosition")
 
@@ -168,14 +183,16 @@ fun sweeps(tool: String, args: JSONObject): Boolean =
         listOf("name", "area", "floor").all { args.optString(it).isBlank() }
 
 /**
- * [args] pointed at [device] -- said as fully as a tile says it, since an air conditioner is both a
- * climate and a switch entity under one name and the name alone comes back DUPLICATE_NAME. What the
- * model already said about where and what kind is kept.
+ * [args] pointed at [device] by the name and the kind the house has for it -- the kind because an
+ * air conditioner is both a climate and a switch entity under one name, and the name alone comes back
+ * DUPLICATE_NAME. Neither the kind nor the room the model said is kept: 書斎照明 is a switch, so
+ * "light" is refused, and the room the listing shows is not always the one the house matches on.
  */
 fun renamed(args: JSONObject, device: Device): JSONObject = JSONObject(args.toString()).apply {
     put("name", device.name)
-    if (!has("domain")) put("domain", JSONArray().put(device.domain))
-    if (!has("area") && device.area.isNotBlank()) put("area", device.area)
+    put("domain", JSONArray().put(device.domain))
+    remove("area")
+    remove("floor")
 }
 
 /**

@@ -27,6 +27,8 @@ class Conversation(
         fun onAssistantText(text: String)
         /** A tool has just run, so whatever it changed in the world is worth redrawing. */
         fun onToolUsed(name: String)
+        /** Devices to pick from by number, or empty once the question is settled. */
+        fun onChoices(names: List<String>)
         fun onError(message: String)
     }
 
@@ -139,7 +141,12 @@ class Conversation(
                     thread {
                         val result = tools.run(name, args)
                         client?.sendToolResult(id, name, result)
-                        main.post { ui.onToolUsed(name) }
+                        val choices = result.optJSONArray("choices")
+                            ?.let { list -> (0 until list.length()).map(list::optString) }.orEmpty()
+                        main.post {
+                            ui.onToolUsed(name)
+                            ui.onChoices(choices)
+                        }
                     }
                 }
 

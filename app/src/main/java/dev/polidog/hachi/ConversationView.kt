@@ -29,6 +29,11 @@ class ConversationView(context: Context) : FrameLayout(context) {
         letterSpacing = 0.08f
     }
     private val user = caption(MUTED, Typeface.NORMAL, 15f)
+    // Read from across the room, so as large as the reply: "2番" is only an answer if "2" can be seen.
+    private val choices = caption(Color.rgb(0xF2, 0xF0, 0xEB), Typeface.NORMAL, 26f).apply {
+        gravity = Gravity.START
+        visibility = GONE
+    }
     // Not TEXT: the rest of the app is dark type on paper, and this is the one place that is night.
     private val assistant = caption(Color.rgb(0xF2, 0xF0, 0xEB), Typeface.BOLD, 24f)
 
@@ -49,6 +54,8 @@ class ConversationView(context: Context) : FrameLayout(context) {
                 gravity = Gravity.CENTER_HORIZONTAL
                 val side = context.dp(28)
                 setPadding(side, 0, side, context.dp(42))
+                addView(choices, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                    .apply { bottomMargin = context.dp(24) })
                 addView(status)
                 addView(user)
                 addView(assistant)
@@ -97,7 +104,13 @@ class ConversationView(context: Context) : FrameLayout(context) {
         status.text = statusText
         user.text = ""
         assistant.text = ""
+        showChoices(emptyList())
         visibility = View.VISIBLE
+    }
+
+    fun showChoices(names: List<String>) {
+        choices.text = names.mapIndexed { i, it -> "${i + 1}   $it" }.joinToString("\n")
+        choices.visibility = if (names.isEmpty()) GONE else VISIBLE
     }
 
     fun setStatus(text: String) { status.text = text }

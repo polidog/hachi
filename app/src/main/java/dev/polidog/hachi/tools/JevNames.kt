@@ -18,14 +18,14 @@ import java.util.concurrent.TimeUnit
  * actually has -- asked only after a miss, so a name that matches costs nothing.
  */
 class JevNames(private val key: String) {
-    /** Blocking -- network. The listed name meant by [args], or null when none is clearly it. */
-    fun pick(args: JSONObject, devices: List<Device>): String? = try {
+    /** Blocking -- network. Which listed name [args] meant, or null when Jev could not be asked. */
+    fun pick(args: JSONObject, devices: List<Device>): JevPick? = try {
         val request = Request.Builder().url(ENDPOINT)
             .header("Authorization", "Bearer $key")
             .post(jevRequest(args, devices).toString().toRequestBody(JSON)).build()
         http.newCall(request).execute().use {
             val body = it.body?.string().orEmpty()
-            if (it.isSuccessful) jevChoice(body) else {
+            if (it.isSuccessful) jevPick(body) else {
                 Log.w("Hachi", "jev failed (${it.code}): ${body.take(200)}")
                 null
             }
@@ -64,18 +64,31 @@ fun jevRequest(args: JSONObject, devices: List<Device>): JSONObject {
         .put("questions", JSONObject().put("device", JSONObject()
             .put("type", "choice")
             .put("instructions", "A voice assistant asked Home Assistant to operate the device named in " +
-                "`request.name`, but no device has exactly that name. The name came from speech, so it may " +
+                "`request.name` -- or, with no name, the device of kind `request.domain` in the room " +
+                "`request.area` -- but the house found nothing by that name or in that room. The name came from speech, so it may " +
                 "differ from the real one by particles such as の, spacing, word order, reading or a synonym. " +
                 "Which listed device did the user mean? `request.area` and `request.domain`, when present, " +
                 "say where and what kind. Choose none when no device is clearly the same thing.")
             .put("criteria", criteria)))
 }
 
-/** The chosen name, or null for none, an unsure answer, or a body that is not an answer. */
-fun jevChoice(body: String, threshold: Double = JEV_CONFIDENCE): String? {
+/** The name Jev is sure of, or failing that the few it thinks likely, most likely first. */
+class JevPick(val sure: String?, val maybe: List<String>)
+
+// ponytail: 0.05 and three are guesses; a list that is always full of noise wants a higher floor.
+private const val JEV_MAYBE = 0.05
+private const val JEV_MAYBE_COUNT = 3
+
+/** Null for a body that is not an answer; an unsure answer or none still names what was likely. */
+fun jevPick(body: String, threshold: Double = JEV_CONFIDENCE): JevPick? {
     val answer = runCatching { JSONObject(body).getJSONObject("answers").getJSONObject("device") }.getOrNull()
         ?: return null
     val choice = answer.optString("choice")
-    if (choice.isBlank() || choice == JEV_NONE) return null
-    return choice.takeIf { answer.optDouble("confidence", 0.0) >= threshold }
+    val sure = choice.takeIf { it.isNotBlank() && it != JEV_NONE && answer.optDouble("confidence", 0.0) >= threshold }
+    val odds = answer.optJSONObject("probabilities")
+    val maybe = odds?.keys()?.asSequence()
+        ?.filter { it != JEV_NONE && odds.optDouble(it, 0.0) >= JEV_MAYBE }
+        ?.sortedByDescending { odds.optDouble(it, 0.0) }
+        ?.take(JEV_MAYBE_COUNT)?.toList().orEmpty()
+    return JevPick(sure, maybe)
 }

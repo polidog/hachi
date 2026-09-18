@@ -51,15 +51,17 @@ private fun houseTools(settings: Settings): List<Tool> {
     val cached = runCatching { JSONArray(settings.houseTools) }.getOrNull() ?: return emptyList()
     val declarations = mcpDeclarations(cached)
     val live = declarations.map { it.optString("name") }.firstOrNull { it.endsWith("GetLiveContext") }
-    val rename = JevNames.from(settings)?.takeIf { live != null }?.let { jev ->
+    val jev = JevNames.from(settings)
+    val rename = live?.let {
         { args: JSONObject ->
-            val devices = liveContext(server.call(live!!, JSONObject()).optString("result"))
-            // A name the house lists was refused for another reason (DUPLICATE_NAME, a wrong area).
-            if (devices.isEmpty() || devices.any { it.name == args.optString("name") }) null
+            val devices = liveContext(server.call(live, JSONObject()).optString("result"))
             // The thermostat over its infrared twin, as a tile does: it is the one that knows the mode.
-            else jev.pick(args, devices)?.let { meant ->
-                devices.filter { it.name == meant }.let { same -> same.firstOrNull { it.domain == "climate" } ?: same.firstOrNull() }
-            }
+            fun device(name: String?) = devices.filter { it.name == name }
+                .let { same -> same.firstOrNull { it.domain == "climate" } ?: same.firstOrNull() }
+            // A name the house lists, refused all the same: said with the wrong kind (書斎照明 is a
+            // switch, heard as a light) or the wrong room, which the retry puts right.
+            device(args.optString("name"))?.let { Meant(it, emptyList()) }
+                ?: jev?.takeIf { devices.isNotEmpty() }?.pick(args, devices)?.let { Meant(device(it.sure), it.maybe) }
         }
     }
     return declarations.map { McpTool(server, it, rename) }
