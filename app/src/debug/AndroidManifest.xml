@@ -4,5 +4,6 @@
              receiver cannot ship. It is exported because `adb shell am broadcast` runs as the shell
              user, which cannot reach a non-exported component. -->
         <receiver android:name=".DebugSettingsReceiver" android:exported="true" />
+        <receiver android:name=".DebugToolReceiver" android:exported="true" />
     </application>
 </manifest>

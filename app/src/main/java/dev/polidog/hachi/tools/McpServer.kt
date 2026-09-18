@@ -22,10 +22,9 @@ import java.util.concurrent.TimeUnit
  * id the server hands out on `initialize` has to be echoed on everything after it.
  */
 class McpServer(private val endpoint: String, private val token: String) {
-    private val http = OkHttpClient.Builder()
-        .callTimeout(20, TimeUnit.SECONDS)
-        .build()
-
+    // Home Assistant hands out no session id at all and simply accepts what follows; other servers
+    // require theirs to be echoed. So the handshake is what gates a request, not the id.
+    @Volatile private var initialized = false
     @Volatile private var session: String? = null
     private var lastId = 0
 
@@ -42,7 +41,7 @@ class McpServer(private val endpoint: String, private val token: String) {
 
     /** Blocking. Null when the call did not come back, for any reason. */
     private fun request(method: String, params: JSONObject): JSONObject? {
-        if (session == null && !handshake()) return null
+        if (!initialized && !handshake()) return null
         val body = JSONObject()
             .put("jsonrpc", "2.0")
             .put("id", ++lastId)
@@ -51,6 +50,7 @@ class McpServer(private val endpoint: String, private val token: String) {
         // A session outlives neither a restart of Home Assistant nor its own idle timeout, and the
         // gap between listing the tools and calling one is however long until someone speaks.
         val answer = post(body) ?: run {
+            initialized = false
             session = null
             if (!handshake()) return null
             post(body)
@@ -74,13 +74,11 @@ class McpServer(private val endpoint: String, private val token: String) {
                     .put("capabilities", JSONObject())
                     .put("clientInfo", JSONObject().put("name", "hachi").put("version", "1")),
             )
-        post(initialize) ?: return false
-        if (session == null) {
-            Log.w(TAG, "mcp: no session id in the initialize response")
-            return false
-        }
+        val hello = post(initialize) ?: return false
+        Log.i(TAG, "mcp: ${hello.optJSONObject("result")?.optJSONObject("serverInfo")}")
         // The server is entitled to refuse everything else until this arrives.
         post(JSONObject().put("jsonrpc", "2.0").put("method", "notifications/initialized"))
+        initialized = true
         return true
     }
 
@@ -109,6 +107,13 @@ class McpServer(private val endpoint: String, private val token: String) {
 
     companion object {
         private const val TAG = "Hachi"
+
+        // One client for the whole app: the registry and the house page each hold their own server,
+        // and both are rebuilt whenever settings might have changed.
+        private val http = OkHttpClient.Builder()
+            .callTimeout(20, TimeUnit.SECONDS)
+            .build()
+
         private const val PROTOCOL = "2025-06-18"
         private val JSON = "application/json".toMediaType()
 
@@ -190,10 +195,16 @@ fun mcpDeclaration(tool: JSONObject?): JSONObject? {
 fun geminiSchema(raw: JSONObject?): JSONObject? {
     if (raw == null) return null
     val type = schemaType(raw)
-    // A union of shapes: Gemini has no equivalent, so the first branch is the one we offer.
+    // A union of shapes: Gemini has no equivalent, so the first branch is the one we offer. What
+    // the argument means is written on the union itself, not on the branch, and losing it leaves the
+    // model an argument it cannot tell the purpose of.
     if (type == null) {
         val branch = raw.optJSONArray("anyOf") ?: raw.optJSONArray("oneOf")
-        return geminiSchema(branch?.optJSONObject(0))
+        val chosen = geminiSchema(branch?.optJSONObject(0)) ?: return null
+        if (!chosen.has("description")) {
+            raw.optString("description").takeIf { it.isNotBlank() }?.let { chosen.put("description", it) }
+        }
+        return chosen
     }
     val out = JSONObject().put("type", type)
     raw.optString("description").takeIf { it.isNotBlank() }?.let { out.put("description", it) }

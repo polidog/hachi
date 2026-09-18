@@ -25,6 +25,8 @@ class Conversation(
         fun onSpend(label: String)
         fun onUserText(text: String)
         fun onAssistantText(text: String)
+        /** A tool has just run, so whatever it changed in the world is worth redrawing. */
+        fun onToolUsed(name: String)
         fun onError(message: String)
     }
 
@@ -70,16 +72,24 @@ class Conversation(
         speaker.flush()
     }
 
-    fun start() {
+    /**
+     * Opens a session. [greet] is set when the wake word was what started this, and makes Hachi say
+     * something first -- being called by name and answering nothing is the one thing a name is for.
+     */
+    fun start(greet: Boolean = false) {
         if (client != null) return
         val key = settings.geminiKey
         if (key.isBlank()) {
             ui.onError(context.getString(R.string.error_no_api_key))
+            // Refused before it began is still an ending: whoever gave up the microphone for this
+            // -- the wake word listener -- is waiting to be told it can have it back.
+            ui.onState(State.ENDED)
             return
         }
         val cap = settings.dailyCapUsd
         if (usage.overDailyCap(cap)) {
             ui.onError(context.getString(R.string.error_daily_cap, String.format("%.2f", cap)))
+            ui.onState(State.ENDED)
             return
         }
         stopped = false
@@ -98,6 +108,9 @@ class Conversation(
                     mic.start()
                     ui.onState(State.LISTENING)
                     restartSilenceTimer()
+                    // The model will not speak until something has been said to it, so being called
+                    // by name is handed over as the first turn.
+                    if (greet) client?.sendText(greeting())
                 } }
 
                 override fun onUserText(text: String) { main.post {
@@ -126,6 +139,7 @@ class Conversation(
                     thread {
                         val result = tools.run(name, args)
                         client?.sendToolResult(id, name, result)
+                        main.post { ui.onToolUsed(name) }
                     }
                 }
 
@@ -169,7 +183,15 @@ class Conversation(
 
     private fun languageCode() = if (Locale.getDefault().language == "ja") "ja-JP" else "en-US"
 
-    private fun systemInstruction(): String = context.getString(R.string.system_instruction)
+    /** The turn that stands in for the name that was just called across the room. */
+    private fun greeting(): String {
+        val user = settings.userName
+        return if (user.isBlank()) context.getString(R.string.wake_greeting_anon)
+        else context.getString(R.string.wake_greeting, user)
+    }
+
+    private fun systemInstruction(): String =
+        context.getString(R.string.system_instruction, settings.assistantName)
 
     private companion object {
         const val TAG = "Hachi"

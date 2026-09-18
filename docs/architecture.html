@@ -73,7 +73,7 @@ docs/
 
 **Activity は表示だけを持つ。** `MainActivity` は `Conversation.Ui` を実装して字幕と状態を描くだけで、音声も WebSocket も触らない。会話の制御は `Conversation` が持ち、Phase 1 で Foreground Service へ移す（下記）。
 
-**外部サービスごとに 1 クライアント。** Gemini、Open-Meteo、Immich はそれぞれ独立したクラスが HTTP を話し、アプリ内の型に変換して返す。共通の HTTP 抽象は作らない。Home Assistant だけは専用クライアントを持たず、MCP サーバとして喋る（下記）。
+**外部サービスごとに 1 クライアント。** Gemini、Open-Meteo、Immich はそれぞれ独立したクラスが HTTP を話し、アプリ内の型に変換して返す。共通の HTTP 抽象は作らない。Home Assistant の音声操作と機器一覧は MCP サーバを使い、画面のエアコン詳細だけ REST API で補う（下記）。
 
 **端末は 1 台しかない。** 画面サイズ（960x480）・ABI・Android バージョンを分岐で吸収する必要がないので、汎用化はしない。
 
@@ -112,6 +112,14 @@ Gemini の function calling で公開する道具は `tools/` にまとめる。
 
 - **道具の一覧はネット越しなので、セッション開始時には取りに行かない。** `Conversation.start()` はメインスレッドで、その場で `tools/list` を待つわけにいかない。バックグラウンドで取って保存し、次の会話から反映する。初回だけ家の道具が無い状態で始まる
 - **呼び出しごとの承認画面は持たない。** butler はホスト型 MCP の `mcp_approval_request` イベントで都度確認しているが、こちらはモデルが止まってくれない。鍵開けなど危ない操作は口頭で確認してから呼ぶよう system instruction に書く。実際にダイアログが要ると分かるまで作らない
+
+### スマートホームの操作画面
+
+`HousePage` は「部屋 → 機器 → 操作詳細」の順に選ぶ。部屋未設定の機器もまとめて表示する。機器一覧は引き続き MCP の `GetLiveContext` に従い、同名機器は部屋と domain で区別する。
+
+エアコンのモード変更は MCP の組み込みインテントで扱えないため、`tools/ClimateControls.kt` が同じアドレス・トークンで [REST API](https://developers.home-assistant.io/docs/api/rest/) を補う。`/api/template` から climate の entity ID・部屋・対応モード・温度範囲・刻みを読み、部屋と名前が一意に一致した一覧項目にだけ結びつける。一致が曖昧な場合は詳細操作を無効にし、推測で機器を操作しない。
+
+詳細画面は `climate.set_hvac_mode` と `climate.set_temperature` を entity ID 指定で呼ぶ。対応する機器では冷暖自動の上下限温度も扱う。照明などのオン・オフは従来の MCP を使う。送信中の同一機器への操作は止め、失敗時は表示を戻して通知する。
 
 ## 音声パイプラインとハーフデュプレックス制約
 

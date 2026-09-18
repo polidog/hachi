@@ -10,45 +10,55 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * The overlay shown while a conversation runs: a status line, both sides' live captions, and an end
- * button. Tapping anywhere else hushes the reply -- the device cannot be talked over (see the
- * half-duplex gate in [Conversation]), so this is the only way to cut Hachi off mid-sentence.
+ * The overlay shown while a conversation runs: the orb, a status line, both sides' live captions,
+ * and an end button. Tapping anywhere else hushes the reply -- the device cannot be talked over (see
+ * the half-duplex gate in [Conversation]), so this is the only way to cut Hachi off mid-sentence.
+ *
+ * Neither side is labelled. Who said what is carried by the type itself -- what was heard is set
+ * small and quiet, what was answered is set large and bold -- which reads across a room, where a name
+ * repeated in front of every line does not.
  */
 class ConversationView(context: Context) : FrameLayout(context) {
     var onHush: (() -> Unit)? = null
     var onEnd: (() -> Unit)? = null
 
     private val status = TextView(context).apply {
-        setTextColor(CREAM_60)
+        setTextColor(MUTED)
         textSize = 13f
         gravity = Gravity.CENTER
         letterSpacing = 0.08f
     }
-    private val user = caption(Color.argb(0xB3, 0xFA, 0xF6, 0xEC), Typeface.NORMAL)
-    private val assistant = caption(CREAM, Typeface.BOLD)
+    private val user = caption(MUTED, Typeface.NORMAL, 15f)
+    private val assistant = caption(TEXT, Typeface.BOLD, 24f)
 
     init {
-        setBackgroundColor(Color.argb(0xE6, 0x08, 0x0A, 0x12))
+        // Black, and opaque: the sky and the clock behind this have no business showing through,
+        // and the orb only reads as light if there is nothing else lit on the screen.
+        setBackgroundColor(Color.BLACK)
         isClickable = true // swallow taps so they never reach the clock underneath
         setOnClickListener { onHush?.invoke() }
+
+        // The orb has the top of the screen to itself and the captions sit under it, the way the
+        // reference picture reads: a face first, then what was said.
+        addView(OrbView(context), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         addView(
             LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
+                gravity = Gravity.CENTER_HORIZONTAL
                 val side = context.dp(28)
-                setPadding(side, 0, side, 0)
+                setPadding(side, 0, side, context.dp(42))
                 addView(status)
                 addView(user)
                 addView(assistant)
             },
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT),
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM),
         )
 
         addView(
             TextView(context).apply {
                 text = context.getString(R.string.hint_tap_to_hush)
-                setTextColor(Color.argb(0x66, 0xFA, 0xF6, 0xEC))
+                setTextColor(MUTED)
                 textSize = 11f
             },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START)
@@ -58,12 +68,12 @@ class ConversationView(context: Context) : FrameLayout(context) {
         addView(
             TextView(context).apply {
                 text = context.getString(R.string.action_end)
-                setTextColor(CREAM)
+                setTextColor(TEXT)
                 textSize = 14f
                 val h = context.dp(16)
                 val v = context.dp(10)
                 setPadding(h, v, h, v)
-                background = pill(context.dp(20).toFloat(), strokeWidthPx = context.dp(1))
+                background = context.card(radius = 20)
                 setOnClickListener { onEnd?.invoke() }
             },
             LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END)
@@ -73,10 +83,10 @@ class ConversationView(context: Context) : FrameLayout(context) {
         visibility = GONE
     }
 
-    private fun caption(color: Int, style: Int) = TextView(context).apply {
+    private fun caption(color: Int, style: Int, size: Float) = TextView(context).apply {
         setTextColor(color)
         setTypeface(null, style)
-        textSize = 19f
+        textSize = size
         gravity = Gravity.CENTER
         val gap = context.dp(5)
         setPadding(0, gap, 0, gap)
@@ -94,16 +104,16 @@ class ConversationView(context: Context) : FrameLayout(context) {
     fun appendUser(text: String) {
         // A new user turn starts once the assistant has answered the previous one.
         if (assistant.text.isNotEmpty()) { user.text = ""; assistant.text = "" }
-        user.text = context.getString(R.string.speaker_user) + ": " + trimmed(user.text, text)
+        user.text = trimmed(user.text, text)
     }
 
     fun appendAssistant(text: String) {
-        assistant.text = context.getString(R.string.speaker_assistant) + ": " + trimmed(assistant.text, text)
+        assistant.text = trimmed(assistant.text, text)
     }
 
-    /** Transcripts arrive as fragments; keep only the tail so the two lines never overflow. */
+    /** Transcripts arrive as fragments; keep only the tail so the lines never overflow. */
     private fun trimmed(current: CharSequence, addition: String): String {
-        val body = current.toString().substringAfter(": ", current.toString()) + addition
+        val body = current.toString() + addition
         return if (body.length > 120) "…" + body.takeLast(120) else body
     }
 

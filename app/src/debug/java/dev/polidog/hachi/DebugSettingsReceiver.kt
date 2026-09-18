@@ -38,7 +38,12 @@ class DebugSettingsReceiver : BroadcastReceiver() {
                 settings.set(name, value)
                 "$name = $value"
             }
-            else -> "unknown setting: $name (known: ${(SECRETS + PLAIN).sorted().joinToString(", ")})"
+            name in FLAGS -> {
+                val on = value.equals("true", ignoreCase = true) || value == "1"
+                settings.setFlag(name, on)
+                "$name = $on"
+            }
+            else -> "unknown setting: $name (known: ${(SECRETS + PLAIN + FLAGS).sorted().joinToString(", ")})"
         }
         Log.i("Hachi", "debug settings: $result")
         Toast.makeText(context, result, Toast.LENGTH_LONG).show()
@@ -50,6 +55,8 @@ class DebugSettingsReceiver : BroadcastReceiver() {
             "model", "voice", "silenceTimeout", "dailyCap",
             "weatherPlace", "weatherLat", "weatherLon",
             "homeAssistantUrl", "immichUrl", "immichAlbum", "debugScene", "radarZoom",
+            "assistantName", "userName", "wakeLevel",
         )
+        val FLAGS = setOf("wakeEnabled")
     }
 }

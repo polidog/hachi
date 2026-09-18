@@ -6,3 +6,4 @@
 local.properties
 *.iml
 .idea/
+app/src/main/assets/julius/model/

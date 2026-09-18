@@ -16,6 +16,7 @@ import javax.crypto.spec.GCMParameterSpec
  * API key is never written to disk in the clear.
  */
 class Settings(context: Context) {
+    private val app = context.applicationContext
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     fun get(name: String, fallback: String = "") = prefs.getString(name, fallback) ?: fallback
@@ -24,6 +25,23 @@ class Settings(context: Context) {
     fun setFlag(name: String, value: Boolean) { prefs.edit().putBoolean(name, value).apply() }
 
     val geminiKey get() = secret("geminiKey")
+
+    /**
+     * What Hachi is called: the name it answers to and the name [WakeWord] waits for.
+     *
+     * Unset means the name it was shipped with, so a fresh install still has something to be called
+     * -- there is no state where the assistant has no name at all.
+     */
+    val assistantName: String
+        get() = get("assistantName").trim().ifBlank { app.getString(R.string.speaker_assistant) }
+
+    /**
+     * What to call whoever is standing there, when Hachi is called by name and answers back.
+     *
+     * Blank is a real answer, not a missing one: a house with more than one person in it has nobody
+     * in particular to name, and "なんだい？" on its own is what gets said then.
+     */
+    val userName: String get() = get("userName").trim()
     val model get() = get("model", DEFAULT_MODEL)
     val voice get() = get("voice", DEFAULT_VOICE)
     /** Where the weather is fetched for; null until one has been chosen. */
@@ -67,6 +85,17 @@ class Settings(context: Context) {
 
     /** Seconds of silence that end a conversation. */
     val silenceTimeout get() = get("silenceTimeout", "30").toLongOrNull()?.coerceIn(5, 600) ?: 30L
+    /**
+     * How loud a moment has to be before the wake word listener bothers decoding it.
+     *
+     * A calibration knob, not a feature: what counts as speech depends on this microphone's gain,
+     * which no amount of code can work out on its own. Set it from a development machine after
+     * reading the level line WakeWord logs. Too high and it never hears anything; too low only costs
+     * some decoding, since the grammar throws out what is not the phrase.
+     */
+    val wakeLevel get() = get("wakeLevel", "80").toDoubleOrNull()?.coerceIn(10.0, 5000.0) ?: 80.0
+
+    /** Whether saying [assistantName] out loud starts a conversation. */
     var wakeEnabled: Boolean
         get() = flag("wakeEnabled")
         set(value) = setFlag("wakeEnabled", value)

@@ -8,9 +8,10 @@ import org.json.JSONObject
 
 /** Every tool the model is offered, and the one place they are run from. */
 class ToolRegistry(context: Context, settings: Settings) {
-    private val tools: List<Tool> = listOf(
+    private val tools: List<Tool> = listOfNotNull(
         GetCurrentTimeTool(),
         GetWeatherTool(context.applicationContext, settings),
+        GetCalendarTool(context.applicationContext).takeIf { it.available },
     ) + houseTools(settings)
 
     private val byName = tools.associateBy { it.name }

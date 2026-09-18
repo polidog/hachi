@@ -29,7 +29,7 @@
 | 3 | 道具のうち 時刻 (`GetCurrentTimeTool`) と 天気 (`GetWeatherTool`) | 完了 |
 | 4 | ページャと 3 ページ（時計・天気・雨レーダー） | 完了 |
 | 3 | 残り: Home Assistant の MCP クライアント | コードは完了（手順 2〜6）。**実機と実サーバでの確認（手順 1・7）が残り** |
-| 4 | 残り: スマートホームページ・音楽ページ | 未着手 |
+| 4 | 残り: スマートホームページ・音楽ページ | スマートホームページは実機で確認済み（手順 8）。音楽ページは未着手 |
 | 1 | ウェイクワード常時待受と Foreground Service への移行 | 未着手 |
 | 5 | Immich フォトフレーム | 未着手 |
 
@@ -46,14 +46,14 @@
 
 | # | やること | 触るもの | 前提 | 終わりの判定 |
 |---|---------|---------|------|------------|
-| 1 | HA の MCP サーバに疎通確認 | （手元から curl） | HA の Long-Lived Token | ツール名と `inputSchema` が返り、`HassMediaSearchAndPlay` がある |
+| 1 | HA の MCP サーバに疎通確認 | （手元から curl） | HA の Long-Lived Token | ✅ `/api/mcp` が 200、道具 21 本、`media_player__HassMediaSearchAndPlay` あり（HA 2026.9.2 / mcp_server 1.26.0） |
 | 2 | 設定に HA の URL とトークンを足す | `Settings.kt` / `SettingsActivity.kt` | 1 | ✅ 設定画面「家」に URL とトークン。トークンは `setSecret` |
-| 3 | MCP クライアントを書く | `tools/McpServer.kt` / `McpServerTest.kt` | 2 | ✅ `tools/list` → 宣言、`tools/call` → 結果（JVM テスト 10 本）。**ただし貼ってある JSON は手書きで、手順 1 の実レスポンスに差し替える** |
+| 3 | MCP クライアントを書く | `tools/McpServer.kt` / `McpServerTest.kt` | 2 | ✅ `tools/list` → 宣言、`tools/call` → 結果（JVM テスト 12 本、貼ってある JSON は実機の HA から取ったもの） |
 | 4 | レジストリに合流させる | `tools/ToolRegistry.kt` | 3 | ✅ `ToolRegistry` が道具名を `Hachi` タグに出す |
 | 5 | 道具一覧をキャッシュする | `Settings.kt` / `ToolRegistry.kt` | 4 | ✅ `MainActivity.onResume()` が裏で取り、`houseTools` に保存。取れなければ前回のまま |
 | 6 | 危ない操作は口頭確認させる | `system_instruction`（`strings.xml`） | 4 | ✅ 鍵・扉・門扉・警報だけ聞き返す。照明や音楽は確認しない |
-| 7 | 実機で通す | — | 4〜6 | 「電気つけて」で点き、曲名を言うと鳴る |
-| 8 | スマートホームページ | `SmartHomePage.kt` / `MainActivity.kt` | 7 | 機器の一覧が出て、会話で操作すると表示が追従する |
+| 7 | 実機で通す | — | 4〜6 | 道具 23 本を載せて Gemini の setup が通るところまで ✅。声での操作確認が残り |
+| 8 | スマートホームページ | `House.kt` / `HousePage.kt` / `MainActivity.kt` | 7 | ✅ 4 ページ目に機器のタイル、タップで入切、エアコンは運転モードと設定温度（±1℃）。会話で道具が呼ばれたら引き直す（JVM テスト 5 本、実機で点灯・消灯・温度変更を確認） |
 | 9 | 音楽ページ | `MusicPage.kt` / `MainActivity.kt` | 7 | 再生中の曲が出て、再生・停止・次が触れる |
 | 10 | 会話を Foreground Service へ移す | 新 `AssistantService.kt` / `Conversation.kt` / `MainActivity.kt` | なし | 画面を消しても会話が続く |
 | 11 | ウェイクワード常時待受 | butler の Julius 成果物を流用 + `androidTest` | 10 | 「はち」で会話が始まり、誤検出が一晩で数回以内 |
@@ -65,13 +65,25 @@ Home Assistant の MCP サーバ（`/api/mcp`、Streamable HTTP、Bearer トー�
 
 JSON-RPC は OkHttp への POST 2 種類で足りる。テストを書くのは**レスポンスの解釈だけ**（`tools/list` の JSON → 宣言、`tools/call` の結果 → モデルに返す JSON）。通信そのものは叩いて確かめる — `test-architecture.html` の方針どおり。
 
-**手順 1 と 7 だけが残っている。** どちらも実物（HA の Long-Lived Token と端末）が要る。エンドポイントの既定パス `/api/mcp` は未確認のままなので、違っていた場合は設定の「Home Assistant のアドレス」に完全な URL を入れれば足りる（`mcpEndpoint()` が末尾にパスが無いときだけ既定を足す）。
+実機で分かったことが 2 つある。
+
+- **HA は `Mcp-Session-Id` を返さない。** セッション id 無しで `tools/list` も `tools/call` も通る。仕様上は id を配るサーバもあるので、受け取ったら以降に付ける形は残しつつ、**握手が済んだかどうかで判定する**（id の有無で判定すると HA では一本も取れない）
+- **`anyOf` の説明文は分岐側ではなく外側に付いている。** `GetLiveContext` の `domain` がこれで、分岐を選ぶときに外側の `description` を引き継がないと、モデルには用途不明の引数だけが渡る
+
+エンドポイントは既定の `/api/mcp` で当たっていた（`/mcp_server/mcp` は 404、`/mcp_server/sse` は 405）。設定には `http://192.168.1.102:8123` だけを入れてあり、`mcpEndpoint()` が末尾を足している。
 
 手順 5 のキャッシュが要るのは、`Conversation.start()` がメインスレッドで、その場で `tools/list` を待てないため。バックグラウンドで取って保存し、次の会話から反映する。初回だけ家の道具が無い状態で始まる。
 
 ## Phase 4 の残り（手順 8〜9）
 
-どちらも MCP が返した機器の状態を描くだけのページ。`tools/` は UI を知らないという規約は変えない — 道具が呼ばれたことを `Conversation` が見て、ページの更新を UI に伝える。ただし MCP の道具名は HA が決めるので、butler のように「この道具が呼ばれたらこの画面」と名前で分岐するのは脆い。**家の道具が呼ばれたら家のページを更新する**、くらいの粗さで始める。
+どちらも MCP が返した機器の状態を描くだけのページ。スマートホームページは `GetLiveContext` の一覧をタイルにし、タップで `HassTurnOn` / `HassTurnOff` を呼ぶ — 声が通るのと同じ道具、同じ入り口。道具名は HA が決めるので末尾一致で引く（`intent__` などの接頭辞は触らない）。入切できる domain（`light` / `switch` / `fan` / `input_boolean` / `cover`）だけをタイルにして、センサーは読み上げに任せる。
+
+実機で分かったことが 2 つある。
+
+- **`GetLiveContext` は機器がこたえるまで前の状態を返す。** ここの照明で実測 19 秒。タップ直後に読み直すと「押す前の状態」が返ってタイルが勝手に戻るので、**押した状態を 30 秒のあいだ家の答えより優先する**（`House.asked`）。家が名前を照合できなかったときだけ即座に戻す。根治は websocket API の `state_changed` を購読することだが、それは 2 本目のクライアントになる
+- **名前だけで指すと同名の entity で撥ねられる。** 「寝室のエアコン」が `DUPLICATE_NAME` で失敗した。タイルは一覧から来ているので `name` に加えて `area` と `domain` も送る
+- **エアコンは 1 台が 2 つの entity で来る。** 運転モードと設定温度を持つ `climate` と、同じ名前で状態が `unknown` の赤外線 `switch`。同名は `climate` を採る（`tiles()`）。上の `DUPLICATE_NAME` もこれが原因だった
+- **モードを変える道具が無い。** HA の MCP が寄越すのは `HassClimateSetTemperature` だけで、`set_hvac_mode` に当たるものは無い。**冷房・暖房・送風は画面では表示だけ、切り替えは声に任せる**。画面から変えたくなったら websocket か REST を足すことになる（= 2 本目のクライアント）`tools/` は UI を知らないという規約は変えない — 道具が呼ばれたことを `Conversation` が見て、ページの更新を UI に伝える。ただし MCP の道具名は HA が決めるので、butler のように「この道具が呼ばれたらこの画面」と名前で分岐するのは脆い。**家の道具が呼ばれたら家のページを更新する**、くらいの粗さで始める。
 
 ## Phase 1（手順 10〜11）
 
@@ -86,7 +98,7 @@ Immich の API から写真を取って一定間隔で切り替える。1 ペー
 ## 気をつける点
 
 - **Spotify の `media_player` が `search_media` に対応していないと、選曲だけ落ちる。** 機器操作は無傷。手順 1 で分かるので、そこで分かったら音楽の選曲は別の道を考える
-- **`tools/list` が大きいと、毎セッションの setup でトークンを食う。** 日次上限に効くので、手順 4 の時点で `Usage` の日額を見て、前と比べる
+- **`tools/list` が大きいと、毎セッションの setup でトークンを食う。** 実測で道具は 21 本。道具 2 本のときの `promptTokenCount` は初回 893 だったので、23 本にした後の初回と比べる（未計測）
 - **HA 側で「Assist に公開」していない entity は見えない。** 道具が空で返ったらまずここを疑う
 - **MCP が期待どおり動かなかった場合の退路**は、butler から HA クライアントを移植すること（ファジーマッチ・部屋名の Jinja テンプレート・service のホワイトリストで 400 行以上）。そのときはこの計画の手順 3〜7 を差し替える
 

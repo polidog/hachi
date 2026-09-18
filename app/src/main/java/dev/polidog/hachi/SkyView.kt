@@ -1,6 +1,8 @@
 package dev.polidog.hachi
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -30,22 +32,35 @@ class SkyView(context: Context) : View(context) {
     private var scene = SkyScene.CLEAR
     private var isDay = true
 
-    private val sky = Paint()
+    private val sky = Paint().apply { isDither = true }
     private var skyMinute = -1
     private var skyScene: SkyScene? = null
 
     private val cloudPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     /**
-     * One unit-circle gradient, reused for every cloud through a matrix.
+     * One unit-circle gradient, reused for every cloud lobe through a matrix.
      *
      * Flat ovals read as ovals, not cloud. Fading from the middle outwards is what makes a blob look
-     * like weather, and building the gradient once keeps 25 fps from allocating six shaders a frame.
+     * like weather, and building the gradient once keeps 25 fps from allocating shaders a frame.
      */
     private val cloudShader = RadialGradient(
         0f, 0f, 1f,
         intArrayOf(Color.WHITE, Color.argb(0xB0, 0xFF, 0xFF, 0xFF), Color.TRANSPARENT),
         floatArrayOf(0f, 0.45f, 1f),
+        Shader.TileMode.CLAMP,
+    )
+
+    /**
+     * The same lobes in shadow, drawn slightly lower.
+     *
+     * Daylight comes from above, so a cloud is bright on top and heavy underneath; a uniformly white
+     * blob is the thing that reads as cotton wool.
+     */
+    private val cloudShadeShader = RadialGradient(
+        0f, 0f, 1f,
+        intArrayOf(Color.argb(0xFF, 0x33, 0x3B, 0x4A), Color.argb(0x8C, 0x3A, 0x43, 0x54), Color.TRANSPARENT),
+        floatArrayOf(0f, 0.5f, 1f),
         Shader.TileMode.CLAMP,
     )
     private val cloudMatrix = Matrix()
@@ -65,8 +80,34 @@ class SkyView(context: Context) : View(context) {
     /** Seeded so the sky is laid out the same way across a redraw or a rotation, not reshuffled. */
     private val random = Random(20260917)
 
+    /**
+     * A still grain laid over the finished sky.
+     *
+     * Three gradient stops down a tablet band visibly and read as flat paint. A few percent of noise
+     * breaks the bands up and is most of what makes the screen look like sky rather than a fill.
+     */
+    private val grainPaint = Paint().apply {
+        val size = 96
+        val pixels = IntArray(size * size) {
+            val v = 0x60 + random.nextInt(0x60)
+            (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+        }
+        shader = BitmapShader(
+            Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888),
+            Shader.TileMode.REPEAT,
+            Shader.TileMode.REPEAT,
+        )
+        alpha = 0x0E
+    }
+
     private class Star(val x: Float, val y: Float, val radius: Float, val phase: Float)
-    private class Cloud(val y: Float, val width: Float, val height: Float, val speed: Float, val offset: Float, val alpha: Int)
+    private class Cloud(
+        val y: Float, val width: Float, val height: Float, val speed: Float, val offset: Float,
+        val alpha: Int,
+        /** The lumps this cloud is built from, in fractions of its own width and height. */
+        val lobes: List<Lobe>,
+    )
+    private class Lobe(val dx: Float, val dy: Float, val rx: Float, val ry: Float)
     private class Drop(val x: Float, val offset: Float, val speed: Float, val length: Float, val width: Float, val alpha: Int)
     private class Flake(val x: Float, val offset: Float, val speed: Float, val radius: Float, val sway: Float, val phase: Float)
 
@@ -125,6 +166,7 @@ class SkyView(context: Context) : View(context) {
         }
         val cloudCount = 7
         clouds = List(cloudCount) { index ->
+            val lobeCount = 4 + random.nextInt(3)
             Cloud(
                 // Kept to the top half: cloud sitting behind the clock is what dims it, and cloud
                 // down at the horizon just looks like fog.
@@ -134,7 +176,17 @@ class SkyView(context: Context) : View(context) {
                 speed = w * (0.005f + random.nextFloat() * 0.009f),
                 // Spread evenly with a jitter, so they never bunch up on one side of the screen.
                 offset = (index + random.nextFloat() * 0.8f) / cloudCount,
-                alpha = 0x16 + random.nextInt(0x1C),
+                // Kept low: the sky is near black now, and white cloud over it reads as smoke.
+                alpha = 0x0A + random.nextInt(0x10),
+                lobes = List(lobeCount) { lobe ->
+                    val t = (lobe + 0.5f) / lobeCount
+                    // Fattest in the middle, thin at the ends: a cloud's silhouette, not a sausage.
+                    val bulge = 1f - abs(t - 0.5f) * 1.6f
+                    val rx = 0.13f + 0.16f * bulge + random.nextFloat() * 0.05f
+                    val ry = 0.26f + 0.34f * bulge + random.nextFloat() * 0.10f
+                    // Bottoms roughly level: cloud sits on its base and piles up on top.
+                    Lobe(t, 1f - ry * (0.95f + random.nextFloat() * 0.10f), rx, ry)
+                },
             )
         }
         // Three depths: near drops fall faster, longer and more solid than far ones.
@@ -191,6 +243,8 @@ class SkyView(context: Context) : View(context) {
                 drawLightning(canvas, seconds)
             }
         }
+
+        canvas.drawPaint(grainPaint)
     }
 
     private fun drawSky(canvas: Canvas, minuteOfDay: Int) {
@@ -218,23 +272,36 @@ class SkyView(context: Context) : View(context) {
 
     private fun drawClouds(canvas: Canvas, seconds: Float, density: Float) {
         val shown = (clouds.size * density).toInt().coerceAtLeast(1)
-        cloudPaint.shader = cloudShader
         for (cloud in clouds.take(shown)) {
             val span = width + cloud.width * 2f
             // Drifts right, reappearing on the left; the offset keeps them from moving as a block.
             val x = ((cloud.offset * span + seconds * cloud.speed) % span) - cloud.width
-            cloudPaint.alpha = (cloud.alpha * density).toInt()
-            // Two overlapping lobes: one blob alone is a circle, two make a cloud.
-            blob(canvas, x + cloud.width * 0.5f, cloud.y + cloud.height * 0.5f, cloud.width * 0.5f, cloud.height * 0.5f)
-            blob(canvas, x + cloud.width * 0.78f, cloud.y + cloud.height * 0.62f, cloud.width * 0.36f, cloud.height * 0.40f)
+            val alpha = (cloud.alpha * density).toInt()
+            // The shaded underside first, then the lit lobes over it, so the cloud has a top and a
+            // bottom rather than being one even smear. Overlapping lobes thicken where they meet,
+            // which is the mottling a single oval can't do.
+            cloudPaint.shader = cloudShadeShader
+            cloudPaint.alpha = (alpha * 0.55f).toInt()
+            for (lobe in cloud.lobes) {
+                blob(canvas, cloudShadeShader, cloud, x, lobe, lift = 0.12f)
+            }
+            cloudPaint.shader = cloudShader
+            cloudPaint.alpha = alpha
+            for (lobe in cloud.lobes) {
+                blob(canvas, cloudShader, cloud, x, lobe, lift = 0f)
+            }
         }
         cloudPaint.shader = null
     }
 
-    private fun blob(canvas: Canvas, cx: Float, cy: Float, rx: Float, ry: Float) {
+    private fun blob(canvas: Canvas, shader: RadialGradient, cloud: Cloud, x: Float, lobe: Lobe, lift: Float) {
+        val cx = x + lobe.dx * cloud.width
+        val cy = cloud.y + (lobe.dy + lift) * cloud.height
+        val rx = lobe.rx * cloud.width
+        val ry = lobe.ry * cloud.height
         cloudMatrix.setScale(rx, ry)
         cloudMatrix.postTranslate(cx, cy)
-        cloudShader.setLocalMatrix(cloudMatrix)
+        shader.setLocalMatrix(cloudMatrix)
         canvas.drawOval(cx - rx, cy - ry, cx + rx, cy + ry, cloudPaint)
     }
 

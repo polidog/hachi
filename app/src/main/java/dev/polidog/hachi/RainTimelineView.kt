@@ -24,11 +24,11 @@ class RainTimelineView(context: Context) : View(context) {
 
     private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(0x33, 0xFA, 0xF6, 0xEC)
+        color = HAIRLINE
         strokeWidth = context.dp(1).toFloat()
     }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(0x8A, 0xFA, 0xF6, 0xEC)
+        color = MUTED
         textSize = context.dp(10).toFloat()
     }
     private val bar = RectF()
@@ -72,8 +72,8 @@ class RainTimelineView(context: Context) : View(context) {
     private companion object {
         /** mm/h that fills a bar. 10 mm/h is already heavy rain. */
         const val FULL_SCALE = 10.0
-        val OBSERVED = Color.rgb(0x6F, 0xB1, 0xE8)
-        val FORECAST = Color.argb(0x8A, 0x6F, 0xB1, 0xE8)
-        val DRY = Color.argb(0x2E, 0xFA, 0xF6, 0xEC)
+        val OBSERVED = LIME
+        val FORECAST = Color.argb(0x8A, 0xC8, 0xF2, 0x4E)
+        val DRY = Color.argb(0x2E, 0xF2, 0xF4, 0xEE)
     }
 }

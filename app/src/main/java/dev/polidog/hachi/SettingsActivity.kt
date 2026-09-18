@@ -63,11 +63,11 @@ class SettingsActivity : Activity() {
         setContentView(
             LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                setBackgroundColor(Color.rgb(0x10, 0x13, 0x1B))
+                setBackgroundColor(INK)
                 addView(
                     ScrollView(context).apply {
                         addView(list)
-                        setBackgroundColor(Color.rgb(0x16, 0x1A, 0x24))
+                        setBackgroundColor(SURFACE)
                     },
                     LinearLayout.LayoutParams(0, -1, 0.36f),
                 )
@@ -107,6 +107,47 @@ class SettingsActivity : Activity() {
                     host.settings.geminiKey,
                     InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
                 ) { host.settings.setSecret("geminiKey", it.trim()) }
+            },
+        ),
+        null to Item(
+            title = getString(R.string.settings_name),
+            summary = { settings.assistantName },
+            detail = { host, pane ->
+                host.textPane(
+                    pane,
+                    getString(R.string.settings_name),
+                    getString(R.string.settings_name_help),
+                    host.settings.assistantName,
+                    InputType.TYPE_CLASS_TEXT,
+                ) { host.settings.set("assistantName", it.trim()) }
+            },
+        ),
+        null to Item(
+            title = getString(R.string.settings_user_name),
+            summary = { settings.userName.ifBlank { getString(R.string.settings_unset) } },
+            detail = { host, pane ->
+                host.textPane(
+                    pane,
+                    getString(R.string.settings_user_name),
+                    getString(R.string.settings_user_name_help),
+                    host.settings.userName,
+                    InputType.TYPE_CLASS_TEXT,
+                ) { host.settings.set("userName", it.trim()) }
+            },
+        ),
+        null to Item(
+            title = getString(R.string.settings_wake),
+            summary = { getString(if (settings.wakeEnabled) R.string.settings_on else R.string.settings_off) },
+            detail = { host, pane ->
+                val on = getString(R.string.settings_on)
+                val off = getString(R.string.settings_off)
+                host.choicePane(
+                    pane,
+                    getString(R.string.settings_wake),
+                    getString(R.string.settings_wake_help),
+                    listOf(on, off),
+                    if (host.settings.wakeEnabled) on else off,
+                ) { host.settings.wakeEnabled = it == on }
             },
         ),
         null to Item(
@@ -224,7 +265,7 @@ class SettingsActivity : Activity() {
                     TextView(host).apply {
                         text = host.usage.label()
                         textSize = 26f
-                        setTextColor(CREAM)
+                        setTextColor(TEXT)
                         setPadding(0, host.dp(12), 0, 0)
                     }
                 )
@@ -238,7 +279,7 @@ class SettingsActivity : Activity() {
             TextView(this).apply {
                 text = getString(R.string.settings_title)
                 textSize = 19f
-                setTextColor(CREAM)
+                setTextColor(TEXT)
                 setPadding(dp(18), dp(16), dp(18), dp(6))
             }
         )
@@ -248,7 +289,7 @@ class SettingsActivity : Activity() {
                     TextView(this).apply {
                         text = section
                         textSize = 12f
-                        setTextColor(Color.rgb(0x8A, 0xB4, 0xF8))
+                        setTextColor(LIME)
                         setPadding(dp(18), dp(12), dp(18), dp(2))
                     }
                 )
@@ -260,19 +301,19 @@ class SettingsActivity : Activity() {
     private fun row(index: Int, item: Item) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(18), dp(9), dp(14), dp(9))
-        if (index == selected) setBackgroundColor(Color.argb(0x24, 0x8A, 0xB4, 0xF8))
+        if (index == selected) setBackgroundColor(SURFACE_ON)
         addView(
             TextView(context).apply {
                 text = item.title
                 textSize = 15f
-                setTextColor(if (index == selected) CREAM else Color.argb(0xDD, 0xFA, 0xF6, 0xEC))
+                setTextColor(if (index == selected) LIME else TEXT)
             }
         )
         addView(
             TextView(context).apply {
                 text = item.summary()
                 textSize = 12f
-                setTextColor(CREAM_60)
+                setTextColor(MUTED)
             }
         )
         setOnClickListener { select(index) }
@@ -306,7 +347,7 @@ class SettingsActivity : Activity() {
                             id = i + 1
                             text = option
                             textSize = 14f
-                            setTextColor(CREAM)
+                            setTextColor(TEXT)
                             setPadding(dp(6), dp(7), 0, dp(7))
                         }
                     )
@@ -336,13 +377,12 @@ class SettingsActivity : Activity() {
             setText(current)
             this.inputType = inputType
             textSize = 15f
-            setTextColor(CREAM)
+            setTextColor(TEXT)
             setSelection(text.length)
         }
         pane.addView(field, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         pane.addView(
-            Button(this).apply {
-                text = getString(R.string.settings_save)
+            accentButton(getString(R.string.settings_save)).apply {
                 setOnClickListener {
                     save(field.text.toString())
                     drawList()
@@ -361,7 +401,7 @@ class SettingsActivity : Activity() {
         val current = TextView(this).apply {
             text = settings.weatherPlace?.name ?: getString(R.string.settings_unset)
             textSize = 16f
-            setTextColor(CREAM)
+            setTextColor(TEXT)
             setPadding(0, dp(4), 0, dp(10))
         }
         pane.addView(current)
@@ -370,14 +410,13 @@ class SettingsActivity : Activity() {
             hint = getString(R.string.settings_place_hint)
             inputType = InputType.TYPE_CLASS_TEXT
             textSize = 15f
-            setTextColor(CREAM)
+            setTextColor(TEXT)
         }
         pane.addView(field, LinearLayout.LayoutParams(-1, -2))
 
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         pane.addView(
-            Button(this).apply {
-                text = getString(R.string.settings_search)
+            accentButton(getString(R.string.settings_search)).apply {
                 setOnClickListener {
                     val query = field.text.toString().trim()
                     if (query.isBlank()) return@setOnClickListener
@@ -410,10 +449,21 @@ class SettingsActivity : Activity() {
         pane.addView(results, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
     }
 
+    /** The one button per pane that does something: the accent, the way the rest of the app uses it. */
+    private fun accentButton(title: String) = Button(this).apply {
+        text = title
+        isAllCaps = false
+        textSize = 14f
+        setTextColor(ON_LIME)
+        background = pill(dp(20).toFloat(), LIME)
+        stateListAnimator = null
+        setPadding(dp(22), 0, dp(22), 0)
+    }
+
     private fun resultLine(text: String, onClick: (() -> Unit)?) = TextView(this).apply {
         this.text = text
         textSize = 14f
-        setTextColor(if (onClick == null) CREAM_60 else CREAM)
+        setTextColor(if (onClick == null) MUTED else TEXT)
         setPadding(0, dp(9), 0, dp(9))
         if (onClick != null) setOnClickListener { onClick() }
     }
@@ -421,13 +471,13 @@ class SettingsActivity : Activity() {
     private fun paneTitle(text: String) = TextView(this).apply {
         this.text = text
         textSize = 20f
-        setTextColor(CREAM)
+        setTextColor(TEXT)
     }
 
     private fun paneHelp(text: String): View = TextView(this).apply {
         this.text = text
         textSize = 12f
-        setTextColor(CREAM_60)
+        setTextColor(MUTED)
         setPadding(0, dp(6), 0, dp(4))
     }
 }
