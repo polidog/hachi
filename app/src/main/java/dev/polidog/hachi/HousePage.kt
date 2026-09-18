@@ -19,7 +19,7 @@ import java.text.NumberFormat
 
 /**
  * Rooms → devices → controls. A device that is only on or off is switched from its card; the
- * rest open a page of controls.
+ * rest open a page of controls. A room with an air conditioner opens on its controls.
  *
  * A page of the pager, swiped to like the weather.
  */
@@ -80,7 +80,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }
         when {
             device != null -> detail(device)
-            area != null -> deviceList(devices.filter { it.area == area })
+            area != null -> room(devices.filter { it.area == area })
             else -> rooms(devices, house.devices)
         }
     }
@@ -104,6 +104,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
             }, LinearLayout.LayoutParams(WRAP, context.dp(48)).apply { marginEnd = context.dp(12) })
             addView(label(device?.name ?: roomName(area!!), 23f).apply { maxLines = 1 },
                 LinearLayout.LayoutParams(0, WRAP, 1f))
+            air(house.devices.filter { it.area == area })
         }, LinearLayout.LayoutParams(FILL, WRAP).apply { bottomMargin = context.dp(12) })
     }
 
@@ -133,10 +134,6 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
      */
     private fun roomCard(room: String, members: List<Device>, everything: List<Device>) = FrameLayout(context).apply {
         val on = members.count { it.isOn }
-        // A thermometer in the room, or else what the air conditioner feels.
-        val indoor = everything.firstOrNull { it.measures("temperature") }?.let { number(it.state.toDouble()) + (it.unit ?: "°") }
-            ?: members.firstNotNullOfOrNull { it.climate?.current?.let { t -> degrees(t, it) } }
-        val humidity = everything.firstOrNull { it.measures("humidity") }?.let { number(it.state.toDouble()) + "%" }
         val name = roomName(room)
         background = RippleDrawable(PRESS, RoomBackdrop(context, room.hashCode()), null)
 
@@ -152,14 +149,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
                     addView(HouseGlyph(context, "room", if (on > 0) ACCENT_INK else MUTED),
                         LayoutParams(context.dp(24), context.dp(24), Gravity.CENTER))
                 }, LinearLayout.LayoutParams(context.dp(52), context.dp(52)).apply { marginEnd = context.dp(4) })
-                if (indoor != null) {
-                    addView(rule())
-                    addView(figure(indoor, context.getString(R.string.house_room)))
-                }
-                if (humidity != null) {
-                    addView(rule())
-                    addView(figure(humidity, context.getString(R.string.house_humidity)))
-                }
+                air(everything)
             }, LinearLayout.LayoutParams(WRAP, WRAP).apply { bottomMargin = context.dp(10) })
             addView(label(name, 19f).apply { maxLines = 1; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) })
             addView(label(members.joinToString("・") { it.name }, 11f, MUTED).apply {
@@ -186,6 +176,18 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         setOnClickListener { area = room; selected = null; navigate() }
     }
 
+    /**
+     * A room's air, each figure after a rule: a thermometer in it, or else what the air conditioner
+     * feels, and a hygrometer. Nothing when nothing there is measuring.
+     */
+    private fun LinearLayout.air(everything: List<Device>) {
+        val indoor = everything.firstOrNull { it.measures("temperature") }?.let { number(it.state.toDouble()) + (it.unit ?: "°") }
+            ?: everything.firstNotNullOfOrNull { it.climate?.current?.let { t -> degrees(t, it) } }
+        val humidity = everything.firstOrNull { it.measures("humidity") }?.let { number(it.state.toDouble()) + "%" }
+        indoor?.let { addView(rule()); addView(figure(it, context.getString(R.string.house_room))) }
+        humidity?.let { addView(rule()); addView(figure(it, context.getString(R.string.house_humidity))) }
+    }
+
     /** One number of a room card: the value over a small grey caption. */
     private fun figure(value: String, caption: String, color: Int = TEXT) = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
@@ -203,13 +205,57 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
     private fun deviceList(devices: List<Device>) = carousel(devices.map(::deviceCard), 196)
 
     /**
+     * A room with an air conditioner opens on its controls, since that is what it is visited for;
+     * the rest of the room waits in a row of pills underneath.
+     */
+    private fun room(members: List<Device>) {
+        val ac = members.firstOrNull { it.domain == "climate" } ?: return deviceList(members)
+        detail(ac)
+        val others = members - ac
+        if (others.isEmpty()) return
+        val row = LinearLayout(context)
+        others.forEach { row.addView(chip(it), LinearLayout.LayoutParams(WRAP, context.dp(52)).apply { marginEnd = context.dp(10) }) }
+        content.addView(HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = OVER_SCROLL_NEVER
+            addView(row)
+        }, LinearLayout.LayoutParams(FILL, WRAP).apply { topMargin = context.dp(12) })
+    }
+
+    /** A device as a pill: its mark, its name, what it is doing. A tap does what its card would. */
+    private fun chip(device: Device) = LinearLayout(context).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(context.dp(14), 0, context.dp(20), 0)
+        background = RippleDrawable(PRESS, pill(context.dp(26).toFloat(), SURFACE), null)
+        val tone = if (device.isOn) ACCENT_INK else MUTED
+        addView(HouseGlyph(context, device.domain, tone),
+            LinearLayout.LayoutParams(context.dp(24), context.dp(24)).apply { marginEnd = context.dp(10) })
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(label(device.name, 14f).apply { maxLines = 1 })
+            addView(label(status(device), 11f, tone).apply { maxLines = 1; setPadding(0, context.dp(2), 0, 0) })
+        })
+        contentDescription = "${device.name}, ${status(device)}"
+        isFocusable = true
+        setOnClickListener { press(device) }
+    }
+
+    /** Only a thermostat has more to it than on and off. A state the house does not know still opens,
+     * so the page can offer both presses instead of guessing one. */
+    private fun switchable(device: Device) = device.domain != "climate" && device.state != "unknown"
+
+    private fun press(device: Device) =
+        if (switchable(device)) house.toggle(device) else { selected = device.key; navigate() }
+
+    private fun status(device: Device) =
+        if (house.busy(device)) context.getString(R.string.house_sending) else state(device)
+
+    /**
      * A device as a card lit by its own state: the glyph standing in a pool of its light, the name,
      * and what it is doing now. Opening it is still the only thing a tap does.
      */
     private fun deviceCard(device: Device) = FrameLayout(context).apply {
-        // Only a thermostat has more to it than on and off. A state the house does not know still
-        // opens, so the page can offer both presses instead of guessing one.
-        val switch = device.domain != "climate" && device.state != "unknown"
+        val switch = switchable(device)
         background = RippleDrawable(PRESS, backdrop(device), null)
         addView(HouseGlyph(context, device.domain, if (device.isOn) ACCENT_INK else MUTED),
             LayoutParams(context.dp(52), context.dp(52), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
@@ -222,8 +268,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
             addView(LinearLayout(context).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, context.dp(12), 0, 0)
-                val status = if (house.busy(device)) context.getString(R.string.house_sending) else state(device)
-                addView(label(status, 12f, if (device.isOn) ACCENT_INK else MUTED).apply { maxLines = 1 },
+                addView(label(status(device), 12f, if (device.isOn) ACCENT_INK else MUTED).apply { maxLines = 1 },
                     LinearLayout.LayoutParams(0, WRAP, 1f))
                 if (!switch) addView(label("›", 18f, INK).apply {
                     gravity = Gravity.CENTER
@@ -233,7 +278,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }, LayoutParams(FILL, WRAP, Gravity.BOTTOM))
         contentDescription = "${device.name}, ${state(device)}"
         isFocusable = true
-        setOnClickListener { if (switch) house.toggle(device) else { selected = device.key; navigate() } }
+        setOnClickListener { press(device) }
     }
 
     /** The light a device gives off on its card: lamplight, the air conditioner's mode, or none. */
@@ -258,7 +303,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
 
     private fun detail(device: Device) {
         val enabled = device.available && !house.busy(device)
-        val status = if (house.busy(device)) context.getString(R.string.house_sending) else state(device)
+        val status = status(device)
         if (device.domain == "climate") {
             if (house.busy(device)) content.addView(label(status, 12f, MUTED).apply { setPadding(0, 0, 0, context.dp(6)) })
             climateDetail(device, enabled)
@@ -317,7 +362,6 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         val single = !range && climate.features and 1 != 0
         val readings = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            addView(stat(R.string.house_room, climate.current?.let { degrees(it, device) } ?: "—"))
             addView(stat(R.string.house_mode, context.getString(hvacLabel(device.state))))
             if (range) {
                 temperature(this, device, climate.low, "target_temp_low", R.string.house_low_temperature, enabled)
