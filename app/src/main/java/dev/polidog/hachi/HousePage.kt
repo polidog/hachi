@@ -35,7 +35,6 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
 
     init {
         setPadding(context.dp(28), context.dp(54), context.dp(28), context.dp(12))
-        setBackgroundColor(INK)
         // Keep the reserved chrome outside the scrolling viewport. Padding on ScrollView itself
         // can make short overflows fail its touch-scroll range check on this Android version.
         clipToPadding = true
