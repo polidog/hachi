@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import java.io.BufferedReader
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -21,7 +22,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
 /**
@@ -42,7 +43,8 @@ import kotlin.concurrent.thread
 class WakeWord(
     private val context: Context,
     private val settings: Settings,
-    private val onHeard: () -> Unit,
+    /** Called with what was said after the name in the same breath, as 16 kHz PCM16, or null if nothing was. */
+    private val onHeard: (ByteArray?) -> Unit,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val binary = File(context.applicationInfo.nativeLibraryDir, EXECUTABLE)
@@ -122,11 +124,13 @@ class WakeWord(
                 // Julius's silence, and a threshold set too high looks like both. Once a second,
                 // say what actually arrived and whether any of it was loud enough to send on.
                 if (++chunks % LEVEL_EVERY == 0) julius.logLevel()
-                if (julius.accept(buffer, count)) {
-                    Log.i(TAG, "woken by \"$word\"")
+                val heard = julius.accept(buffer, count)
+                if (heard != null) {
+                    val said = heard.takeIf { it.isNotEmpty() }
+                    Log.i(TAG, "woken by \"$word\"" + (said?.let { ", ${it.size / 32}ms of request with it" } ?: ""))
                     // Whoever takes over wants the microphone, and the finally below is about to let
                     // go of it -- so hand over on the main thread, after this loop, not inside it.
-                    main.post { if (!stopped) onHeard() }
+                    main.post { if (!stopped) onHeard(said) }
                     break
                 }
             }
@@ -163,7 +167,8 @@ class WakeWord(
 private class Julius(context: Context, word: String, dict: String, rmsThreshold: Double) : AutoCloseable {
     private val recognition = JuliusWake(word, JuliusWake.THRESHOLD, JuliusWake.MAX_FILLERS)
     private val threshold = rmsThreshold
-    private val woken = AtomicBoolean(false)
+    /** Set by the module reader on a hit: the utterance's audio if it went on past the name, else empty. */
+    private val woken = AtomicReference<ByteArray?>(null)
     @Volatile private var closed = false
     @Volatile private var broken = false
     private val threads = mutableListOf<Thread>()
@@ -177,10 +182,15 @@ private class Julius(context: Context, word: String, dict: String, rmsThreshold:
     private val sendBuffer = ShortArray(1600)
     private var sendFill = 0
 
+    // The segment being sent, kept whole: if it turns out to be the name and a request, the request is
+    // in here and has not been heard by anything but Julius.
+    private val segment = ByteArrayOutputStream()
+    @Volatile private var lastSegment = ByteArray(0)
+
     private val vad = WakeVad(
-        onSegmentStart = {},
-        onSegmentAudio = { samples, count -> buffer(samples, count) },
-        onSegmentEnd = { flush(); sendEnd() },
+        onSegmentStart = { segment.reset() },
+        onSegmentAudio = { samples, count -> keep(samples, count); buffer(samples, count) },
+        onSegmentEnd = { lastSegment = segment.toByteArray(); flush(); sendEnd() },
         rmsThreshold = rmsThreshold,
     )
 
@@ -233,12 +243,22 @@ private class Julius(context: Context, word: String, dict: String, rmsThreshold:
         threads += thread(name = "hachi-julius-adcmd") { readCommands() }
     }
 
-    /** Feeds one chunk of microphone audio and reports whether the phrase has been heard since the last call. */
-    fun accept(samples: ShortArray, count: Int): Boolean {
+    /**
+     * Feeds one chunk of microphone audio. Non-null once the phrase has been heard since the last call:
+     * the whole utterance if it carried a request after the name, empty if it was the name alone.
+     */
+    fun accept(samples: ShortArray, count: Int): ByteArray? {
         alive()
         vad.accept(samples, count)
         alive()
-        return woken.compareAndSet(true, false)
+        return woken.getAndSet(null)
+    }
+
+    private fun keep(samples: ShortArray, count: Int) {
+        for (i in 0 until count) {
+            segment.write(samples[i].toInt())
+            segment.write(samples[i].toInt() shr 8)
+        }
     }
 
     private fun alive() {
@@ -328,7 +348,8 @@ private class Julius(context: Context, word: String, dict: String, rmsThreshold:
                 // What it thought each utterance was, with the confidence it gave. Without this, a
                 // phrase that never wakes the house cannot be told from one that is never heard.
                 if (BuildConfig.DEBUG && line.trim().startsWith("<WHYPO")) Log.d("Hachi", "heard: ${line.trim()}")
-                if (recognition.feed(line)) woken.set(true)
+                // The result arrives after the segment's end marker, so the segment is already whole.
+                if (recognition.feed(line)) woken.set(if (recognition.followed) lastSegment else ByteArray(0))
             }
             if (!closed) broken = true
         } catch (_: IOException) { if (!closed) broken = true }

@@ -36,6 +36,8 @@ class ConversationView(context: Context) : FrameLayout(context) {
     }
     // Not TEXT: the rest of the app is dark type on paper, and this is the one place that is night.
     private val assistant = caption(Color.rgb(0xF2, 0xF0, 0xEB), Typeface.BOLD, 24f)
+    private val orb = OrbView(context)
+    private val lines = LinearLayout(context)
 
     init {
         // Black, and opaque: the sky and the clock behind this have no business showing through,
@@ -46,10 +48,10 @@ class ConversationView(context: Context) : FrameLayout(context) {
 
         // The orb has the top of the screen to itself and the captions sit under it, the way the
         // reference picture reads: a face first, then what was said.
-        addView(OrbView(context), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(orb, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
         addView(
-            LinearLayout(context).apply {
+            lines.apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
                 val side = context.dp(28)
@@ -105,7 +107,21 @@ class ConversationView(context: Context) : FrameLayout(context) {
         user.text = ""
         assistant.text = ""
         showChoices(emptyList())
+        setBackgroundColor(Color.BLACK)
+        orb.visibility = VISIBLE
+        lines.background = null
         visibility = View.VISIBLE
+    }
+
+    /**
+     * Steps aside for a screen the model has put up: the black and the orb go, and the captions keep
+     * a dark strip of their own along the bottom. Taps still hush rather than reach the screen -- it is
+     * there to be read, and the end button is what hands it back.
+     */
+    fun peek() {
+        setBackgroundColor(Color.TRANSPARENT)
+        orb.visibility = GONE
+        lines.setBackgroundColor(Color.argb(0xD9, 0, 0, 0))
     }
 
     fun showChoices(names: List<String>) {

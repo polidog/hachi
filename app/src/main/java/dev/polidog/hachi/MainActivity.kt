@@ -26,6 +26,8 @@ import kotlin.concurrent.thread
 /** The clock, the weather and the house. The calendar lifts over the clock from its date. */
 private const val PAGES = 3
 private const val HOUSE = 2
+/** What the model calls each page, in the pager's order. */
+private val PAGE_NAMES = listOf("clock", "weather", "house")
 
 class MainActivity : Activity(), Conversation.Ui {
     private lateinit var settings: Settings
@@ -46,7 +48,7 @@ class MainActivity : Activity(), Conversation.Ui {
     /** Whether this screen was built with the night palette; see [turnOver]. */
     private var builtNight = false
     private val turnOver = Runnable { turnOverIfDue() }
-    private val wake by lazy { WakeWord(this, settings) { startConversation(calledByName = true) } }
+    private val wake by lazy { WakeWord(this, settings) { said -> startConversation(calledByName = true, said = said) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -211,7 +213,8 @@ class MainActivity : Activity(), Conversation.Ui {
         talk.visibility = if (pager.page == 0 && !talking) View.VISIBLE else View.GONE
     }
 
-    private fun startConversation(calledByName: Boolean = false) {
+    /** [said] is a request that came in the same breath as the name, to be answered instead of greeted. */
+    private fun startConversation(calledByName: Boolean = false, said: ByteArray? = null) {
         // Being called by name over the bell is how it is answered.
         Timers.silence()
         if (conversation?.active == true) return
@@ -226,7 +229,7 @@ class MainActivity : Activity(), Conversation.Ui {
         }
         // Both want the one microphone, and Julius holds it until it is told not to.
         wake.stop()
-        conversation = Conversation(this, settings, this).also { it.start(greet = calledByName) }
+        conversation = Conversation(this, settings, this).also { it.start(greet = calledByName, said = said) }
     }
 
     /**
@@ -320,6 +323,19 @@ class MainActivity : Activity(), Conversation.Ui {
     override fun onToolUsed(name: String) = refreshHouse()
 
     override fun onChoices(names: List<String>) = captions.showChoices(names)
+
+    /** The screen asked for goes in front, and the conversation steps down to a strip so it can be seen. */
+    override fun onShow(screen: String) {
+        if (screen == "calendar") {
+            pager.goTo(0)
+            calendarPage.show()
+        } else {
+            // Swiping away puts the calendar away; being asked for another screen does too.
+            if (calendarPage.showing) calendarPage.hide()
+            pager.goTo(PAGE_NAMES.indexOf(screen).coerceAtLeast(0))
+        }
+        captions.peek()
+    }
 
     @Deprecated("Uses the platform back callback on this API 30 device")
     override fun onBackPressed() {

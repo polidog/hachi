@@ -34,20 +34,33 @@ class JuliusWake(
     private var inBlock = false
     private var fillers = 0
     private var hit = false
+    /** Fillers heard before the wake word; the rest came after it. */
+    private var leading = 0
+
+    /**
+     * Whether the last block that woke it carried words after the name -- "はーいミラ、電気消して" in one
+     * breath, a request rather than just a call. Read right after [feed] returns true.
+     */
+    var followed = false
+        private set
 
     fun feed(line: String): Boolean {
         val trimmed = line.trim()
         when {
             // A new block starts: anything half-read from a malformed one is dropped, not carried over.
-            trimmed.startsWith("<RECOGOUT") -> { inBlock = true; fillers = 0; hit = false }
+            trimmed.startsWith("<RECOGOUT") -> { inBlock = true; fillers = 0; leading = 0; hit = false }
             trimmed == "." -> {
-                val woken = inBlock && hit && fillers <= maxFillers
-                inBlock = false; fillers = 0; hit = false
+                // A false wake is the name inside running speech, so it is what came *before* the name
+                // that counts against it. A name that opens the utterance may be followed by a whole
+                // request, and that request is not speech the name is buried in.
+                val woken = inBlock && hit && (fillers <= maxFillers || leading <= MAX_LEADING)
+                followed = woken && fillers - leading >= FOLLOWED_BY
+                inBlock = false; fillers = 0; leading = 0; hit = false
                 return woken
             }
             inBlock && trimmed.startsWith("<WHYPO") -> {
                 val attrs = ATTR.findAll(trimmed).associate { it.groupValues[1] to it.groupValues[2] }
-                if (attrs["WORD"] == "<garbage>") fillers++
+                if (attrs["WORD"] == "<garbage>") { fillers++; if (!hit) leading++ }
                 if (attrs["WORD"] == wakeWord) {
                     // Julius writes CM="-" when it did not compute a confidence for that word; that is
                     // not a confident hit, so a value that will not parse counts as no hit at all.
@@ -73,5 +86,14 @@ class JuliusWake(
          */
         const val THRESHOLD = 0.05
         const val MAX_FILLERS = 10
+
+        /**
+         * Fillers a name may carry in front of it and still open the utterance, and fillers after it
+         * that make it a request. ponytail: guesses, not sweeps -- a held "ミラー" decodes as a filler
+         * or two, so a request needs a few more than that. If the house wakes at sentences that happen
+         * to start with the name, lower [MAX_LEADING] to 0 first.
+         */
+        const val MAX_LEADING = 2
+        const val FOLLOWED_BY = 4
     }
 }

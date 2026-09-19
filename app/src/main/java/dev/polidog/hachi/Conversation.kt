@@ -29,6 +29,8 @@ class Conversation(
         fun onToolUsed(name: String)
         /** Devices to pick from by number, or empty once the question is settled. */
         fun onChoices(names: List<String>)
+        /** The model wants one of the screens seen -- one of [dev.polidog.hachi.tools.ShowScreenTool.SCREENS]. */
+        fun onShow(screen: String)
         fun onError(message: String)
     }
 
@@ -77,8 +79,10 @@ class Conversation(
     /**
      * Opens a session. [greet] is set when the wake word was what started this, and makes Hachi say
      * something first -- being called by name and answering nothing is the one thing a name is for.
+     * [said] is a request that was already spoken along with the name ("はーいミラ、電気消して"): it is
+     * sent as the first thing heard, and answered in place of the greeting.
      */
-    fun start(greet: Boolean = false) {
+    fun start(greet: Boolean = false, said: ByteArray? = null) {
         if (client != null) return
         val key = settings.geminiKey
         if (key.isBlank()) {
@@ -107,12 +111,20 @@ class Conversation(
             tools = tools.declarations,
             listener = object : GeminiLiveClient.Listener {
                 override fun onReady() { main.post {
+                    // Before the live microphone, so it arrives in the order it was said; the room's
+                    // quiet after it is what the server's VAD takes as the end of the request.
+                    if (said != null) {
+                        for (at in said.indices step SAID_CHUNK) {
+                            client?.sendAudio(said.copyOfRange(at, minOf(at + SAID_CHUNK, said.size)))
+                        }
+                        Log.i(TAG, "sent ${said.size / 32}ms said with the name")
+                    }
                     mic.start()
                     ui.onState(State.LISTENING)
                     restartSilenceTimer()
                     // The model will not speak until something has been said to it, so being called
                     // by name is handed over as the first turn.
-                    if (greet) client?.sendText(greeting())
+                    if (greet && said == null) client?.sendText(greeting())
                 } }
 
                 override fun onUserText(text: String) { main.post {
@@ -143,9 +155,11 @@ class Conversation(
                         client?.sendToolResult(id, name, result)
                         val choices = result.optJSONArray("choices")
                             ?.let { list -> (0 until list.length()).map(list::optString) }.orEmpty()
+                        val shown = result.optString("shown")
                         main.post {
                             ui.onToolUsed(name)
                             ui.onChoices(choices)
+                            if (shown.isNotEmpty()) ui.onShow(shown)
                         }
                     }
                 }
@@ -202,5 +216,7 @@ class Conversation(
 
     private companion object {
         const val TAG = "Hachi"
+        /** 100 ms of 16 kHz PCM16: a request goes up in pieces, not as one eight-second message. */
+        const val SAID_CHUNK = 3200
     }
 }

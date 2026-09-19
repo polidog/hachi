@@ -13,6 +13,7 @@ class ToolRegistry(context: Context, settings: Settings) {
         GetCurrentTimeTool(),
         TimerTool(context.applicationContext),
         SetVolumeTool(context.applicationContext),
+        ShowScreenTool(),
         GetWeatherTool(context.applicationContext, settings),
         GetCalendarTool(context.applicationContext).takeIf { it.available },
     ) + houseTools(settings)

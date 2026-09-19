@@ -9,8 +9,9 @@ class JuliusWakeTest {
     private fun parser() = JuliusWake("ハーイミラ", JuliusWake.THRESHOLD, JuliusWake.MAX_FILLERS)
 
     /** Feeds a whole block and reports what the terminator line said. */
-    private fun block(vararg words: Pair<String, String>): Boolean {
-        val p = parser()
+    private fun block(vararg words: Pair<String, String>): Boolean = feedBlock(parser(), *words)
+
+    private fun feedBlock(p: JuliusWake, vararg words: Pair<String, String>): Boolean {
         assertFalse(p.feed("<RECOGOUT>"))
         assertFalse(p.feed("""  <SHYPO RANK="1" SCORE="-4188.459473">"""))
         for ((word, cm) in words) {
@@ -38,7 +39,21 @@ class JuliusWakeTest {
     }
 
     @Test fun `buried in a long run of speech does not`() {
-        assertFalse(block("ハーイミラ" to "0.5", *fillers(11)))
+        assertFalse(block(*fillers(11), "ハーイミラ" to "0.5"))
+        assertFalse(block(*fillers(6), "ハーイミラ" to "0.5", *fillers(5)))
+    }
+
+    /** "はーいミラ、テレビ消して" in one breath: the name opens it, and the request runs on long after. */
+    @Test fun `a name followed by a request wakes it, and says so`() {
+        val p = parser()
+        assertTrue(feedBlock(p, "ハーイミラ" to "0.078", *fillers(14)))
+        assertTrue(p.followed)
+        assertTrue(feedBlock(p, "ハーイミラ" to "0.078", *fillers(1)))
+        assertFalse(p.followed)
+    }
+
+    @Test fun `the same request with the name in the middle of it does not`() {
+        assertFalse(block(*fillers(3), "ハーイミラ" to "0.5", *fillers(10)))
     }
 
     @Test fun `some other word does not`() {
