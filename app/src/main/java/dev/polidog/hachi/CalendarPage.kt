@@ -46,7 +46,7 @@ class CalendarPage(context: Context) : FrameLayout(context) {
     }
     private val weekday = text(20f, TEXT)
     private val dayList = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-    private val monthLabel = text(16f, TEXT).apply { gravity = Gravity.CENTER }
+    private val monthLabel = text(20f, TEXT).apply { gravity = Gravity.CENTER }
     private val message = text(14f, MUTED)
     private val grid = GridLayout(context).apply { columnCount = 7 }
 
@@ -64,7 +64,7 @@ class CalendarPage(context: Context) : FrameLayout(context) {
                 LinearLayout(context).apply {
                     gravity = Gravity.CENTER_VERTICAL
                     addView(arrow("‹", R.string.calendar_previous) { turn(-1) })
-                    addView(monthLabel, LinearLayout.LayoutParams(context.dp(120), WRAP))
+                    addView(monthLabel, LinearLayout.LayoutParams(context.dp(140), WRAP))
                     addView(arrow("›", R.string.calendar_next) { turn(1) })
                 },
                 LinearLayout.LayoutParams(WRAP, WRAP).apply { marginStart = -context.dp(14) },
@@ -82,7 +82,8 @@ class CalendarPage(context: Context) : FrameLayout(context) {
         }
         val right = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
+            // Sits low, so a six-week month keeps its initials clear of the gear in the corner.
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             addView(message)
             addView(grid)
         }
@@ -159,7 +160,7 @@ class CalendarPage(context: Context) : FrameLayout(context) {
         grid.removeAllViews()
         // Monday first, as the week is lived rather than as the calendar app prints it.
         for (day in DayOfWeek.entries) {
-            grid.addView(text(12f, MUTED).apply {
+            grid.addView(text(14f, MUTED).apply {
                 text = day.getDisplayName(TextStyle.NARROW, Locale.getDefault())
                 gravity = Gravity.CENTER
             }, cell(context.dp(20)))
@@ -175,7 +176,7 @@ class CalendarPage(context: Context) : FrameLayout(context) {
 
     private fun dot(date: LocalDate, busy: Boolean, isToday: Boolean, past: Boolean, chosen: Boolean) = TextView(context).apply {
         text = date.dayOfMonth.toString()
-        textSize = 12f
+        textSize = 16f
         gravity = Gravity.CENTER
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         background = GradientDrawable().apply {
@@ -253,13 +254,16 @@ class CalendarPage(context: Context) : FrameLayout(context) {
     private fun cell(height: Int = context.dp(DOT)) = GridLayout.LayoutParams().apply {
         width = context.dp(DOT)
         this.height = height
-        val gap = context.dp(3)
+        val gap = context.dp(2)
         setMargins(gap, gap, gap, gap)
     }
 
     private companion object {
-        /** Six weeks of these and a row of initials fit the height of a 5-inch screen. */
-        const val DOT = 34
+        /**
+         * As big as a fingertip can hit while six weeks and a row of initials still fit the
+         * height of the 5-inch screen (960x480 at 195dpi: about 394dp tall).
+         */
+        const val DOT = 44
         /** A month of a busy household, which the tool's own cap for reading aloud would cut short. */
         const val MONTH_LIMIT = 400
         val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")
