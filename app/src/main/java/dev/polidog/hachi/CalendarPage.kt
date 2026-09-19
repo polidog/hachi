@@ -2,7 +2,6 @@ package dev.polidog.hachi
 
 import android.content.Context
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
@@ -20,14 +19,14 @@ import java.util.Locale
 import kotlin.concurrent.thread
 
 /**
- * The month as a sheet of dots, off the same calendars the model reads -- see [readCalendar].
+ * The month as a sheet of tiles, off the same calendars the model reads -- see [readCalendar].
  *
- * A filled dot is a day with something on it, an empty ring a free one, and today wears the accent.
+ * A filled tile is a day with something on it, a pale outlined one a free one, and today wears the accent.
  * That is the whole month readable from across the room without a single title on it.
  *
  * The left of the sheet is one day: its number set large, its weekday, and what is on it, set as
- * type with nothing around it. It opens on today; tapping a dot makes that day the one on the left,
- * with a yellow ring round its dot, rather than raising a card over the month.
+ * type with nothing around it. It opens on today; tapping a tile makes that day the one on the left,
+ * with a yellow edge round its tile, rather than raising a card over the month.
  *
  * It lifts over the clock rather than living on a page of its own: the month is worth a glance now
  * and then, not a quarter of the swiping.
@@ -36,7 +35,7 @@ class CalendarPage(context: Context) : FrameLayout(context) {
     private var month: YearMonth = YearMonth.now()
     private var events: List<CalendarEvent> = emptyList()
 
-    /** The day on the left: today until a dot is tapped. */
+    /** The day on the left: today until a tile is tapped. */
     private var day: LocalDate = LocalDate.now()
 
     private val dayNumber = text(88f, TEXT).apply {
@@ -82,8 +81,9 @@ class CalendarPage(context: Context) : FrameLayout(context) {
         }
         val right = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            // Sits low, so a six-week month keeps its initials clear of the gear in the corner.
-            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            // Sits high, starting just under the gear in the corner so a six-week month still fits.
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            setPadding(0, context.dp(56), 0, 0)
             addView(message)
             addView(grid)
         }
@@ -179,16 +179,13 @@ class CalendarPage(context: Context) : FrameLayout(context) {
         textSize = 16f
         gravity = Gravity.CENTER
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            when {
-                isToday -> setColor(ACCENT)
-                busy -> setColor(TEXT)
-                else -> setStroke(context.dp(2), HAIRLINE_STRONG)
-            }
-            // The day on the left, when it is not today: a yellow ring over whatever it is.
-            if (chosen && !isToday) setStroke(context.dp(3), ACCENT)
-        }
+        background = pill(
+            context.dp(8).toFloat(),
+            fill = if (isToday) ACCENT else if (busy) TEXT else SURFACE,
+            strokeWidthPx = context.dp(if (chosen && !isToday) 3 else 1),
+            // The day on the left, when it is not today: a yellow edge over whatever it is.
+            stroke = if (chosen && !isToday) ACCENT else HAIRLINE_STRONG,
+        )
         setTextColor(if (isToday) ON_ACCENT else if (busy) INK else MUTED)
         // What has gone by is still there to look back at, just quieter than what is to come.
         alpha = if (past && !isToday && !chosen) 0.4f else 1f

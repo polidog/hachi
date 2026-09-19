@@ -27,6 +27,9 @@ object Timers {
     private var ringtone: Ringtone? = null
     private val quiet = Runnable { silence() }
 
+    /** Set by the screen while it is up: the bell is also a reason to light it. Main thread. */
+    var onRing: (() -> Unit)? = null
+
     val ringing get() = ringtone?.isPlaying == true
 
     @Synchronized fun pending(): List<Timer> = timers.sortedBy { it.endsAt }
@@ -58,6 +61,7 @@ object Timers {
     private fun ring(context: Context, timer: Timer) {
         synchronized(this) { timers -= timer }
         Log.i("Hachi", "timer done: ${timer.label}")
+        onRing?.invoke()
         if (ringtone?.isPlaying == true) return
         val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
         ringtone = RingtoneManager.getRingtone(context, uri)?.apply {

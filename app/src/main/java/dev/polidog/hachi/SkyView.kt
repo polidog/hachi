@@ -10,6 +10,7 @@ import android.graphics.Matrix
 import android.graphics.Path
 import android.graphics.Paint
 import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Shader
 import android.util.Log
 import android.view.View
@@ -97,6 +98,8 @@ class SkyView(context: Context) : View(context) {
         Shader.TileMode.CLAMP,
     )
     private val cloudMatrix = Matrix()
+    private val spritePaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val spriteRect = RectF()
     private val rainPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
     private val snowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val flashPaint = Paint()
@@ -136,7 +139,13 @@ class SkyView(context: Context) : View(context) {
         val alpha: Int,
         /** The lumps this cloud is built from, in fractions of its own width and height. */
         val lobes: List<Lobe>,
-    )
+    ) {
+        /** The whole cloud painted once, at [SPRITE] scale, for the alpha it was painted at. */
+        var sprite: Bitmap? = null
+        var spriteAlpha = -1
+        /** Where the sprite sits, in view pixels, relative to a cloud drawn at x = 0. */
+        val bounds = RectF()
+    }
     private class Lobe(val dx: Float, val dy: Float, val rx: Float, val ry: Float)
     private class Drop(val x: Float, val offset: Float, val speed: Float, val length: Float, val width: Float, val alpha: Int)
     private class Flake(val x: Float, val offset: Float, val speed: Float, val radius: Float, val sway: Float, val phase: Float)
@@ -189,6 +198,7 @@ class SkyView(context: Context) : View(context) {
 
     private fun populate(w: Int, h: Int) {
         if (w == 0 || h == 0) return
+        for (cloud in clouds) cloud.sprite?.recycle()
         val cloudCount = 7
         clouds = List(cloudCount) { index ->
             val lobeCount = 4 + random.nextInt(3)
@@ -408,6 +418,13 @@ class SkyView(context: Context) : View(context) {
     }
 
     private companion object {
+        /**
+         * The scale clouds are baked at. They are nothing but soft gradients, so half size and a
+         * filtered stretch cannot be told apart, and seven sprites stay around a megabyte.
+         */
+        const val SPRITE = 0.5f
+        /** How far a cloud's shaded underside sits below its lit lobes, in its own heights. */
+        const val SHADE_LIFT = 0.12f
         /** The emblem's radius, as a fraction of the screen's height. */
         const val EMBLEM = 0.40f
         /** How much darker than the paper the emblem's shadow is. */
@@ -441,28 +458,63 @@ class SkyView(context: Context) : View(context) {
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), sky)
     }
 
+    /**
+     * Each cloud is a single bitmap, moved sideways.
+     *
+     * Painted lobe by lobe, a cloudy sky is some seventy screen-sized gradient ovals a frame, and on
+     * this tablet's GPU that measured 10-15 ms of every 40 ms frame. A cloud never changes shape, so
+     * it is painted once and only slid after that.
+     */
     private fun drawClouds(canvas: Canvas, seconds: Float, density: Float) {
         val shown = (clouds.size * density).toInt().coerceAtLeast(1)
-        for (cloud in clouds.take(shown)) {
+        for (i in 0 until shown) {
+            val cloud = clouds[i]
             val span = width + cloud.width * 2f
             // Drifts right, reappearing on the left; the offset keeps them from moving as a block.
             val x = ((cloud.offset * span + seconds * cloud.speed) % span) - cloud.width
-            val alpha = (cloud.alpha * density).toInt()
-            // The shaded underside first, then the lit lobes over it, so the cloud has a top and a
-            // bottom rather than being one even smear. Overlapping lobes thicken where they meet,
-            // which is the mottling a single oval can't do.
-            cloudPaint.shader = cloudShadeShader
-            cloudPaint.alpha = (alpha * 0.55f).toInt()
-            for (lobe in cloud.lobes) {
-                blob(canvas, cloudShadeShader, cloud, x, lobe, lift = 0.12f)
-            }
-            cloudPaint.shader = cloudShader
-            cloudPaint.alpha = alpha
-            for (lobe in cloud.lobes) {
-                blob(canvas, cloudShader, cloud, x, lobe, lift = 0f)
-            }
+            val sprite = sprite(cloud, (cloud.alpha * density).toInt())
+            spriteRect.set(cloud.bounds)
+            spriteRect.offset(x, 0f)
+            canvas.drawBitmap(sprite, null, spriteRect, spritePaint)
         }
+    }
+
+    /**
+     * Baked at the cloud's real alpha rather than faded afterwards: overlapping lobes add up
+     * differently at 10% than at 100%, and that mottling is the point of them.
+     */
+    private fun sprite(cloud: Cloud, alpha: Int): Bitmap {
+        cloud.sprite?.takeIf { cloud.spriteAlpha == alpha }?.let { return it }
+        cloud.sprite?.recycle()
+        val b = cloud.bounds
+        b.setEmpty()
+        for (lobe in cloud.lobes) {
+            val cx = lobe.dx * cloud.width
+            val rx = lobe.rx * cloud.width
+            val ry = lobe.ry * cloud.height
+            val top = cloud.y + lobe.dy * cloud.height - ry
+            val bottom = cloud.y + (lobe.dy + SHADE_LIFT) * cloud.height + ry
+            if (b.isEmpty) b.set(cx - rx, top, cx + rx, bottom) else b.union(cx - rx, top, cx + rx, bottom)
+        }
+        val sprite = Bitmap.createBitmap(
+            (b.width() * SPRITE).toInt() + 1, (b.height() * SPRITE).toInt() + 1, Bitmap.Config.ARGB_8888,
+        )
+        val c = Canvas(sprite)
+        c.scale(SPRITE, SPRITE)
+        c.translate(-b.left, -b.top)
+        // The shaded underside first, then the lit lobes over it, so the cloud has a top and a
+        // bottom rather than being one even smear. Overlapping lobes thicken where they meet,
+        // which is the mottling a single oval can't do.
+        cloudPaint.shader = cloudShadeShader
+        cloudPaint.alpha = (alpha * 0.55f).toInt()
+        for (lobe in cloud.lobes) blob(c, cloudShadeShader, cloud, 0f, lobe, lift = SHADE_LIFT)
+        cloudPaint.shader = cloudShader
+        cloudPaint.alpha = alpha
+        for (lobe in cloud.lobes) blob(c, cloudShader, cloud, 0f, lobe, lift = 0f)
         cloudPaint.shader = null
+        cloud.sprite = sprite
+        cloud.spriteAlpha = alpha
+        return sprite
     }
 
     private fun blob(canvas: Canvas, shader: RadialGradient, cloud: Cloud, x: Float, lobe: Lobe, lift: Float) {

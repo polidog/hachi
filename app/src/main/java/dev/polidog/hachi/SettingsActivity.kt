@@ -9,19 +9,21 @@ import android.text.InputType
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import kotlin.concurrent.thread
 
 /**
- * Settings as master/detail: the list of items on the left, the selected item's controls on the
- * right. The screen is 960x480, so there is room for both at once and no need to dive into a dialog
- * for every change.
+ * Settings grouped into tabs above a master/detail layout: the active category's items on the
+ * left and the selected item's controls on the right. The screen is 960x480, so there is room for
+ * both at once and no need to dive into a dialog for every change.
  *
  * Set on the same paper as the rest of the wall, with none of the platform's own widgets showing:
  * no underlined fields, no radio buttons, no highlighted slab for the selected row. The selected
@@ -30,6 +32,7 @@ import kotlin.concurrent.thread
 class SettingsActivity : Activity() {
     /** One settings row. [detail] fills the right-hand pane when the row is selected. */
     private class Item(
+        val category: Int,
         val title: String,
         val summary: () -> String,
         val detail: (SettingsActivity, LinearLayout) -> Unit,
@@ -39,7 +42,11 @@ class SettingsActivity : Activity() {
     private lateinit var usage: Usage
     private lateinit var list: LinearLayout
     private lateinit var pane: LinearLayout
-    private lateinit var items: List<Pair<String?, Item>> // (section header, item)
+    private lateinit var items: List<Item>
+    private lateinit var listScroll: ScrollView
+    private lateinit var paneScroll: ScrollView
+    private val tabs = mutableMapOf<Int, Pair<TextView, View>>()
+    private val categorySelections = mutableMapOf<Int, Int>()
     private val main = Handler(Looper.getMainLooper())
     private var selected = 0
 
@@ -74,45 +81,29 @@ class SettingsActivity : Activity() {
             isFocusableInTouchMode = true
         }
 
-        setContentView(
-            FrameLayout(this).apply {
-                setBackgroundColor(INK)
-                addView(LinearLayout(context).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    addView(
-                        ScrollView(context).apply {
-                            isVerticalScrollBarEnabled = false
-                            addView(list)
-                        },
-                        LinearLayout.LayoutParams(0, -1, 0.34f),
-                    )
-                    // A hairline, not a change of paper, is all that divides the two panes.
-                    addView(View(context).apply { setBackgroundColor(HAIRLINE) },
-                        LinearLayout.LayoutParams(dp(1), -1).apply { setMargins(0, dp(28), 0, dp(28)) })
-                    addView(
-                        ScrollView(context).apply {
-                            isVerticalScrollBarEnabled = false
-                            addView(pane)
-                        },
-                        LinearLayout.LayoutParams(0, -1, 0.66f),
-                    )
-                })
-                addView(
-                    TextView(context).apply {
-                        text = "×"
-                        textSize = 30f
-                        setTextColor(TEXT)
-                        gravity = Gravity.CENTER
-                        contentDescription = getString(R.string.settings_close)
-                        setOnClickListener { finish() }
-                    },
-                    FrameLayout.LayoutParams(dp(56), dp(56), Gravity.TOP or Gravity.END)
-                        .apply { setMargins(0, dp(10), dp(10), 0) },
-                )
-            }
-        )
-
-        drawList()
+        list.setPadding(0, dp(12), 0, dp(12))
+        listScroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            addView(list)
+        }
+        paneScroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            addView(pane)
+        }
+        setContentView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(INK)
+            addView(buildHeader(), LinearLayout.LayoutParams(-1, dp(64)))
+            addView(View(context).apply { setBackgroundColor(HAIRLINE) },
+                LinearLayout.LayoutParams(-1, dp(1)))
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(listScroll, LinearLayout.LayoutParams(0, -1, 0.34f))
+                addView(View(context).apply { setBackgroundColor(HAIRLINE) },
+                    LinearLayout.LayoutParams(dp(1), -1).apply { setMargins(0, dp(20), 0, dp(20)) })
+                addView(paneScroll, LinearLayout.LayoutParams(0, -1, 0.66f))
+            }, LinearLayout.LayoutParams(-1, 0, 1f))
+        })
         select(0)
 
         thread {
@@ -120,13 +111,14 @@ class SettingsActivity : Activity() {
             main.post {
                 models = fetched
                 // The model pane may be open and still showing the fallback list.
-                if (items[selected].second.title == getString(R.string.settings_model)) select(selected)
+                if (items[selected].title == getString(R.string.settings_model)) select(selected)
             }
         }
     }
 
-    private fun buildItems(): List<Pair<String?, Item>> = listOf(
-        getString(R.string.settings_section_conversation) to Item(
+    private fun buildItems(): List<Item> = listOf(
+        Item(
+            category = R.string.settings_section_conversation,
             title = getString(R.string.settings_api_key),
             summary = {
                 val key = settings.geminiKey
@@ -143,7 +135,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.setSecret("geminiKey", it.trim()) }
             },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_conversation,
             title = getString(R.string.settings_name),
             summary = { settings.assistantName },
             detail = { host, pane ->
@@ -156,7 +149,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.set("assistantName", it.trim()) }
             },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_conversation,
             title = getString(R.string.settings_user_name),
             summary = { settings.userName.ifBlank { getString(R.string.settings_unset) } },
             detail = { host, pane ->
@@ -169,7 +163,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.set("userName", it.trim()) }
             },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_conversation,
             title = getString(R.string.settings_wake),
             summary = { getString(if (settings.wakeEnabled) R.string.settings_on else R.string.settings_off) },
             detail = { host, pane ->
@@ -184,7 +179,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.wakeEnabled = it == on }
             },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_conversation,
             title = getString(R.string.settings_model),
             summary = { settings.model },
             detail = { host, pane ->
@@ -197,7 +193,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.set("model", it) }
             },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_conversation,
             title = getString(R.string.settings_voice),
             summary = { settings.voice },
             detail = { host, pane ->
@@ -210,7 +207,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.set("voice", it) }
             },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_conversation,
             title = getString(R.string.settings_silence),
             summary = { getString(R.string.settings_seconds, settings.silenceTimeout) },
             detail = { host, pane ->
@@ -223,12 +221,32 @@ class SettingsActivity : Activity() {
                 ) { host.settings.set("silenceTimeout", it.trim().ifBlank { "30" }) }
             },
         ),
-        getString(R.string.settings_section_weather) to Item(
+        Item(
+            category = R.string.settings_section_conversation,
+            title = getString(R.string.settings_dim),
+            summary = {
+                val after = settings.dimAfter
+                if (after == 0L) getString(R.string.settings_dim_never)
+                else getString(R.string.settings_minutes, after)
+            },
+            detail = { host, pane ->
+                host.textPane(
+                    pane,
+                    getString(R.string.settings_dim),
+                    getString(R.string.settings_dim_help),
+                    host.settings.dimAfter.toString(),
+                    InputType.TYPE_CLASS_NUMBER,
+                ) { host.settings.set("dimAfter", it.trim().ifBlank { "5" }) }
+            },
+        ),
+        Item(
+            category = R.string.settings_section_weather,
             title = getString(R.string.settings_place),
             summary = { settings.weatherPlace?.name ?: getString(R.string.settings_unset) },
             detail = { host, pane -> host.placePane(pane) },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_weather,
             title = getString(R.string.settings_yahoo_appid),
             summary = {
                 val id = settings.yahooAppId
@@ -244,7 +262,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.setSecret("yahooAppId", it.trim()) }
             },
         ),
-        getString(R.string.settings_section_calendar) to Item(
+        Item(
+            category = R.string.settings_section_calendar,
             title = getString(R.string.settings_calendars),
             summary = {
                 val hidden = settings.hiddenCalendars.size
@@ -253,7 +272,8 @@ class SettingsActivity : Activity() {
             },
             detail = { host, pane -> host.calendarPane(pane) },
         ),
-        getString(R.string.settings_section_house) to Item(
+        Item(
+            category = R.string.settings_section_house,
             title = getString(R.string.settings_ha_url),
             summary = { settings.homeAssistantUrl.ifBlank { getString(R.string.settings_unset) } },
             detail = { host, pane ->
@@ -266,7 +286,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.set("homeAssistantUrl", it.trim()) }
             },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_house,
             title = getString(R.string.settings_ha_token),
             summary = {
                 val token = settings.homeAssistantToken
@@ -282,7 +303,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.setSecret("homeAssistantToken", it.trim()) }
             },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_house,
             title = getString(R.string.settings_typesafe_key),
             summary = {
                 val key = settings.typesafeKey
@@ -298,7 +320,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.setSecret("typesafeKey", it.trim()) }
             },
         ),
-        getString(R.string.settings_section_spend) to Item(
+        Item(
+            category = R.string.settings_section_spend,
             title = getString(R.string.settings_daily_cap),
             summary = {
                 val cap = settings.dailyCapUsd
@@ -314,7 +337,8 @@ class SettingsActivity : Activity() {
                 ) { host.settings.set("dailyCap", it.trim().ifBlank { "0" }) }
             },
         ),
-        null to Item(
+        Item(
+            category = R.string.settings_section_spend,
             title = getString(R.string.settings_usage),
             summary = { usage.label() },
             detail = { host, pane ->
@@ -333,36 +357,72 @@ class SettingsActivity : Activity() {
         ),
     )
 
+    private fun buildHeader() = LinearLayout(this).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        addView(TextView(context).apply {
+            text = getString(R.string.settings_title)
+            textSize = 24f
+            typeface = DISPLAY
+            setTextColor(TEXT)
+            setPadding(dp(28), 0, dp(24), 0)
+        }, LinearLayout.LayoutParams(-2, -2))
+        addView(HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(LinearLayout(context).apply {
+                for (category in items.map { it.category }.distinct()) {
+                    val label = TextView(context).apply {
+                        text = getString(category)
+                        textSize = 15f
+                        gravity = Gravity.CENTER
+                        setPadding(dp(18), 0, dp(18), 0)
+                        minWidth = dp(80)
+                        isFocusable = true
+                        setOnClickListener { selectCategory(category) }
+                    }
+                    val indicator = View(context).apply { setBackgroundColor(ACCENT) }
+                    tabs[category] = label to indicator
+                    addView(FrameLayout(context).apply {
+                        addView(label, FrameLayout.LayoutParams(-1, -1))
+                        addView(indicator, FrameLayout.LayoutParams(-1, dp(3), Gravity.BOTTOM)
+                            .apply { setMargins(dp(18), 0, dp(18), 0) })
+                    }, LinearLayout.LayoutParams(-2, -1))
+                }
+            }, FrameLayout.LayoutParams(-2, -1))
+        }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(TextView(context).apply {
+            text = "×"
+            textSize = 30f
+            setTextColor(TEXT)
+            gravity = Gravity.CENTER
+            isFocusable = true
+            contentDescription = getString(R.string.settings_close)
+            setOnClickListener { finish() }
+        }, LinearLayout.LayoutParams(dp(56), -1).apply { marginEnd = dp(8) })
+    }
+
+    private fun selectCategory(category: Int) {
+        if (items[selected].category == category) return
+        select(categorySelections[category] ?: items.indexOfFirst { it.category == category })
+        listScroll.scrollTo(0, 0)
+        // Bring the remembered row back into view even in the longer conversation menu.
+        list.post {
+            val row = (0 until list.childCount).map { list.getChildAt(it) }.firstOrNull { it.isSelected }
+            if (row != null) listScroll.smoothScrollTo(0, row.top)
+        }
+    }
+
     private fun drawList() {
         list.removeAllViews()
-        list.addView(
-            TextView(this).apply {
-                text = getString(R.string.settings_title)
-                textSize = 28f
-                typeface = DISPLAY
-                setTextColor(TEXT)
-                setPadding(dp(32), dp(24), dp(18), dp(8))
-            }
-        )
-        items.forEachIndexed { index, (section, item) ->
-            if (section != null) {
-                list.addView(
-                    TextView(this).apply {
-                        text = section
-                        textSize = 11f
-                        letterSpacing = 0.25f
-                        isAllCaps = true
-                        setTextColor(MUTED)
-                        setPadding(dp(32), dp(20), dp(18), dp(4))
-                    }
-                )
-            }
-            list.addView(row(index, item))
+        items.forEachIndexed { index, item ->
+            if (item.category == items[selected].category) list.addView(row(index, item))
         }
     }
 
     private fun row(index: Int, item: Item) = LinearLayout(this).apply {
         val on = index == selected
+        isSelected = on
+        isFocusable = true
+        minimumHeight = dp(56)
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(12), dp(8), dp(14), dp(8))
         // The dot is always laid out, only painted when selected, so nothing shifts as it moves.
@@ -394,10 +454,23 @@ class SettingsActivity : Activity() {
     }
 
     private fun select(index: Int) {
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+            .hideSoftInputFromWindow(pane.windowToken, 0)
         selected = index
+        categorySelections[items[index].category] = index
+        for ((category, views) in tabs) {
+            val (label, indicator) = views
+            val on = category == items[index].category
+            label.isSelected = on
+            label.typeface = if (on) DISPLAY else null
+            label.setTextColor(if (on) TEXT else MUTED)
+            indicator.visibility = if (on) View.VISIBLE else View.INVISIBLE
+        }
         drawList()
         pane.removeAllViews()
-        items[index].second.detail(this, pane)
+        items[index].detail(this, pane)
+        pane.requestFocus()
+        paneScroll.scrollTo(0, 0)
     }
 
     private fun choicePane(

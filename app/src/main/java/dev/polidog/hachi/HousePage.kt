@@ -27,7 +27,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
     private val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     private val scroll = ScrollView(context).apply {
         isFillViewport = true
-        isScrollbarFadingEnabled = false
+        isVerticalScrollBarEnabled = false
         addView(content, LayoutParams(FILL, WRAP))
     }
     private var area: String? = null
@@ -60,6 +60,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
     }
 
     fun bind() {
+        setBackgroundColor(INK)
         val devices = tiles(house.devices)
         // Keep the chosen room/device through refreshes, but leave a removed device gracefully.
         if (!house.failed && devices.isNotEmpty()) {
@@ -84,7 +85,7 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }
     }
 
-    /** Nothing over the rooms -- the cards say what they are. Below them, the way back and a name. */
+    /** Nothing over the rooms -- each row says what it is. Below them, the way back and a name. */
     private fun header(device: Device?) {
         if (area == null) return
         content.addView(LinearLayout(context).apply {
@@ -107,11 +108,15 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }, LinearLayout.LayoutParams(FILL, WRAP).apply { bottomMargin = context.dp(12) })
     }
 
-    /** The rooms as a row of cards, scrolled sideways: six of them will not share this screen. */
-    private fun rooms(devices: List<Device>, everything: List<Device>) =
-        carousel(devices.groupBy { it.area }.map { (room, members) ->
-            roomCard(room, members, everything.filter { it.area == room })
-        }, 280)
+    /** Full-width room rows share one vertical scroll, separated only by a fine rule. */
+    private fun rooms(devices: List<Device>, everything: List<Device>) {
+        devices.groupBy { it.area }.entries.forEachIndexed { index, (room, members) ->
+            if (index > 0) content.addView(View(context).apply { setBackgroundColor(HAIRLINE) },
+                LinearLayout.LayoutParams(FILL, context.dp(1)))
+            content.addView(roomRow(room, members, everything.filter { it.area == room }),
+                LinearLayout.LayoutParams(FILL, WRAP))
+        }
+    }
 
     /**
      * A row of cards taking whatever height the page has, so they never push it into a scroll;
@@ -127,48 +132,44 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         }, LinearLayout.LayoutParams(FILL, 0, 1f))
     }
 
-    /**
-     * A room as the reference's profile card: a picture fading into the card, the room's mark
-     * standing on its edge, the name, what is in it, and the numbers in a row with rules between.
-     */
-    private fun roomCard(room: String, members: List<Device>, everything: List<Device>) = FrameLayout(context).apply {
+    /** Paper, a room name, live readings, and one yellow way in; the whole row is a target. */
+    private fun roomRow(room: String, members: List<Device>, everything: List<Device>) = LinearLayout(context).apply {
         val on = members.count { it.isOn }
         val name = roomName(room)
-        background = RippleDrawable(PRESS, RoomBackdrop(context, room.hashCode()), null)
+        gravity = Gravity.CENTER_VERTICAL
+        minimumHeight = context.dp(100)
+        setPadding(context.dp(4), context.dp(18), context.dp(12), context.dp(18))
+        background = RippleDrawable(PRESS, null, ColorDrawable(Color.WHITE))
 
-        // Everything stands on the bottom edge; the picture takes whatever height is left above.
+        addView(FrameLayout(context).apply {
+            background = pill(context.dp(24).toFloat(), if (on > 0) ACCENT else SURFACE)
+            addView(HouseGlyph(context, "room", if (on > 0) ON_ACCENT else MUTED),
+                LayoutParams(context.dp(24), context.dp(24), Gravity.CENTER))
+        }, LinearLayout.LayoutParams(context.dp(48), context.dp(48)).apply { marginEnd = context.dp(18) })
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(context.dp(18), 0, context.dp(14), context.dp(14))
-            // The mark, and beside it the room's air when something in it is measuring.
-            addView(LinearLayout(context).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                addView(FrameLayout(context).apply {
-                    background = pill(context.dp(26).toFloat(), SURFACE)
-                    addView(HouseGlyph(context, "room", if (on > 0) ACCENT_INK else MUTED),
-                        LayoutParams(context.dp(24), context.dp(24), Gravity.CENTER))
-                }, LinearLayout.LayoutParams(context.dp(52), context.dp(52)).apply { marginEnd = context.dp(4) })
-                air(everything)
-            }, LinearLayout.LayoutParams(WRAP, WRAP).apply { bottomMargin = context.dp(10) })
-            addView(label(name, 19f).apply { maxLines = 1; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) })
-            addView(label(members.joinToString("・") { it.name }, 11f, MUTED).apply {
+            addView(label(name, 21f).apply {
                 maxLines = 1
-                setPadding(0, context.dp(3), 0, 0)
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             })
-            addView(LinearLayout(context).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, context.dp(14), 0, 0)
-                addView(figure(on.toString(), context.getString(R.string.house_stat_on), if (on > 0) ACCENT_INK else TEXT))
-                addView(rule())
-                addView(figure(members.size.toString(), context.getString(R.string.house_stat_devices)))
-                addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
-                addView(label(context.getString(R.string.house_open_room), 13f, INK).apply {
-                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                    setPadding(context.dp(16), context.dp(8), context.dp(16), context.dp(8))
-                    background = pill(context.dp(20).toFloat(), TEXT)
-                })
+            addView(label(context.getString(R.string.house_device_count, members.size), 12f, MUTED).apply {
+                maxLines = 1
+                setPadding(0, context.dp(6), 0, 0)
             })
-        }, LayoutParams(FILL, WRAP, Gravity.BOTTOM))
+        }, LinearLayout.LayoutParams(0, WRAP, 1f))
+        addView(LinearLayout(context).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            air(everything)
+            addView(rule())
+            addView(figure(on.toString(), context.getString(R.string.house_stat_on), if (on > 0) ACCENT_INK else TEXT),
+                LinearLayout.LayoutParams(context.dp(42), WRAP))
+        }, LinearLayout.LayoutParams(WRAP, WRAP).apply { marginEnd = context.dp(24) })
+        addView(label(context.getString(R.string.house_open_room), 13f, ON_ACCENT).apply {
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            setPadding(context.dp(18), 0, context.dp(18), 0)
+            background = pill(context.dp(24).toFloat(), ACCENT)
+        }, LinearLayout.LayoutParams(WRAP, context.dp(48)))
 
         contentDescription = "$name, " + context.getString(R.string.house_device_count, members.size)
         isFocusable = true
@@ -177,17 +178,19 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
 
     /**
      * A room's air, each figure after a rule: a thermometer in it, or else what the air conditioner
-     * feels, and a hygrometer. Nothing when nothing there is measuring.
+     * feels, a hygrometer, and a CO₂ meter. Nothing when nothing there is measuring.
      */
     private fun LinearLayout.air(everything: List<Device>) {
         val indoor = everything.firstOrNull { it.measures("temperature") }?.let { number(it.state.toDouble()) + (it.unit ?: "°") }
             ?: everything.firstNotNullOfOrNull { it.climate?.current?.let { t -> degrees(t, it) } }
         val humidity = everything.firstOrNull { it.measures("humidity") }?.let { number(it.state.toDouble()) + "%" }
         indoor?.let { addView(rule()); addView(figure(it, context.getString(R.string.house_room))) }
+        val co2 = everything.firstOrNull { it.measures("carbon_dioxide") }?.let { number(it.state.toDouble()) + "ppm" }
         humidity?.let { addView(rule()); addView(figure(it, context.getString(R.string.house_humidity))) }
+        co2?.let { addView(rule()); addView(figure(it, context.getString(R.string.house_co2))) }
     }
 
-    /** One number of a room card: the value over a small grey caption. */
+    /** One room reading: the value over a small grey caption. */
     private fun figure(value: String, caption: String, color: Int = TEXT) = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
@@ -411,12 +414,12 @@ class HousePage(context: Context, private val house: House) : FrameLayout(contex
         })
     }
 
-    /** A round outlined button carrying one glyph. */
+    /** A warm paper stepper with an accent outline. */
     private fun round(glyph: String, description: String, enabled: Boolean, click: () -> Unit) = Button(context).apply {
         text = glyph
         textSize = 22f
-        setTextColor(TEXT)
-        background = RippleDrawable(PRESS, pill(context.dp(26).toFloat(), Color.TRANSPARENT, context.dp(1), HAIRLINE_STRONG), null)
+        setTextColor(ACCENT_INK)
+        background = RippleDrawable(PRESS, pill(context.dp(26).toFloat(), SURFACE_ON, context.dp(1), ACCENT_INK), null)
         stateListAnimator = null
         minWidth = 0
         minimumWidth = 0

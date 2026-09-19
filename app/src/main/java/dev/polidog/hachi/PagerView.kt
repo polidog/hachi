@@ -30,6 +30,7 @@ class PagerView(context: Context) : ViewGroup(context) {
     private var velocity: VelocityTracker? = null
     private var lastX = 0f
     private var downX = 0f
+    private var downY = 0f
     private var dragging = false
 
     fun addPage(view: View) = addView(view)
@@ -69,6 +70,7 @@ class PagerView(context: Context) : ViewGroup(context) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = event.x
+                downY = event.y
                 lastX = event.x
                 dragging = false
                 if (!scroller.isFinished) scroller.abortAnimation()
@@ -78,7 +80,8 @@ class PagerView(context: Context) : ViewGroup(context) {
                 // vertical scrolling inside a page still reach the page itself. A row inside the
                 // page that can still scroll that way keeps the drag; the page turns at its end.
                 val dx = event.x - downX
-                if (abs(dx) > touchSlop && !canScroll(this, -dx.toInt(), event.x.toInt(), event.y.toInt())) {
+                // A finger scrolling a list drifts sideways too; only a mostly-sideways drag turns.
+                if (abs(dx) > touchSlop && abs(dx) > abs(event.y - downY) && !canScroll(this, -dx.toInt(), event.x.toInt(), event.y.toInt())) {
                     dragging = true
                     lastX = event.x
                 }

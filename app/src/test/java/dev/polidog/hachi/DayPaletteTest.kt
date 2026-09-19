@@ -55,4 +55,14 @@ class DayPaletteTest {
         assertTrue((DayPalette.at(0).top and 0xFF) < 0x20)
         assertTrue((DayPalette.at(720).top and 0xFF) > 0xD0)
     }
+
+    @Test
+    fun theBackdropIsNeverMidGreyUnderTheType() {
+        // Grey type on a grey sky was lost under cloud around dusk; either side of the flip must be clear.
+        for (minute in 0 until 1440) {
+            val grey = washed(DayPalette.at(minute), SkyScene.CLOUDY).middle and 0xFF
+            val night = isNight(java.time.LocalTime.of(minute / 60, minute % 60))
+            assertTrue("$minute: $grey under ${if (night) "light" else "dark"} type", if (night) grey < 0x40 else grey > 0xB0)
+        }
+    }
 }

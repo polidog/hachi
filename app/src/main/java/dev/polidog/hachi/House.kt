@@ -37,13 +37,14 @@ val Device.isOn: Boolean
     else state == "on" || state == "open"
 
 /**
- * Whether this is a sensor reading [what] (`temperature` or `humidity`). The class is not always
- * listed, so a thermometer is also known by its unit, and a hygrometer by its name.
+ * Whether this is a sensor reading [what] (`temperature`, `humidity` or `carbon_dioxide`). The class
+ * is not always listed, so a thermometer is also known by its unit, and the others by unit and name.
  */
 fun Device.measures(what: String) = domain == "sensor" && state.toDoubleOrNull() != null &&
     (kind == what || kind == null && when (what) {
         "temperature" -> unit == "°C" || unit == "°F"
-        else -> unit == "%" && ("湿度" in name || "humid" in name.lowercase())
+        "humidity" -> unit == "%" && ("湿度" in name || "humid" in name.lowercase())
+        else -> unit == "ppm" && ("二酸化炭素" in name || "co2" in name.lowercase() || "CO₂" in name)
     })
 
 /** The domains a tile can work. Everything else the house lists is for the conversation to read. */

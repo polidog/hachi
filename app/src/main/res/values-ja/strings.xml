@@ -25,6 +25,10 @@
     <string name="settings_voice">声</string>
     <string name="settings_silence">会話を終える無音の長さ</string>
     <string name="settings_seconds">%1$d 秒</string>
+    <string name="settings_dim">人がいないとき暗くする</string>
+    <string name="settings_dim_help">触られもせず、部屋で声もしない時間が何分続いたら画面を暗くするかです。この端末に人感センサーは無いので、黙って座っているだけでも暗くなります。触るか何か喋ればすぐ戻ります。0 でずっとつけっぱなし。</string>
+    <string name="settings_dim_never">ずっとつけたまま</string>
+    <string name="settings_minutes">%1$d 分</string>
     <string name="settings_usage">これまでの使用額</string>
     <string name="settings_unset">未設定</string>
     <string name="settings_no_limit">無制限</string>
@@ -125,6 +129,7 @@
     <string name="house_mode">運転モード</string>
     <string name="house_room">室温</string>
     <string name="house_humidity">湿度</string>
+    <string name="house_co2">CO₂</string>
     <string name="house_decrease">%1$sを下げる</string>
     <string name="house_increase">%1$sを上げる</string>
     <string name="house_action_failed">操作を反映できませんでした。もう一度お試しください。</string>

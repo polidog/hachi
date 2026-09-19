@@ -108,6 +108,16 @@ class Settings(context: Context) {
      */
     val wakeLevel get() = get("wakeLevel", "80").toDoubleOrNull()?.coerceIn(10.0, 5000.0) ?: 80.0
 
+    /**
+     * Minutes of nobody there before the screen goes dark; 0 leaves it lit all the time.
+     *
+     * This device has no presence sensor of any kind -- one light sensor, and the real Echo Show's
+     * ultrasound lives in firmware LineageOS replaced -- so "nobody there" means nothing touched the
+     * screen and the wake word listener heard no voice in the room for this long. A room that is
+     * quietly occupied goes dark too; a word or a touch brings it straight back.
+     */
+    val dimAfter get() = get("dimAfter", "5").toLongOrNull()?.coerceIn(0, 240) ?: 5L
+
     /** Whether saying [assistantName] out loud starts a conversation. */
     var wakeEnabled: Boolean
         get() = flag("wakeEnabled")

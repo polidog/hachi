@@ -25,7 +25,6 @@ import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.round
 import kotlin.math.sin
-import kotlin.random.Random
 
 /**
  * Where a drag around the dial lands: [fraction] of the way from [min] to [max], snapped to [step].
@@ -39,7 +38,7 @@ internal fun dialValue(fraction: Float, min: Double, max: Double, step: Double):
     return (round(snapped * 1000) / 1000).coerceIn(min, max)
 }
 
-/** (deep, light): the top and bottom of the dial, and the lit and unlit fan segments. */
+/** (deep, light): the device card's glow for each climate mode. */
 internal fun modeTones(mode: String): Pair<Int, Int> = when (mode) {
     "cool", "dry" -> Color.rgb(0xA9, 0xB9, 0xC4) to Color.rgb(0xE0, 0xE6, 0xEA)
     "heat" -> Color.rgb(0xD9, 0xB0, 0x98) to Color.rgb(0xF1, 0xE3, 0xDA)
@@ -52,86 +51,6 @@ internal fun blend(from: Int, to: Int, t: Float) = Color.rgb(
     (Color.green(from) + (Color.green(to) - Color.green(from)) * t).toInt(),
     (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * t).toInt(),
 )
-
-/**
- * A room card's face: mountains and a river across the top, fading into the card the way the
- * reference's photo does.
- *
- * There is no photo of the room, so the picture is drawn: a hazy far range, a nearer one, a valley
- * with a river winding out of it, a hill in front. Each layer is a gradient -- mist gathers at the
- * foot of every range -- and [seed] shapes the ridges and the river, so each room keeps its own
- * view from one day to the next.
- */
-internal class RoomBackdrop(context: Context, private val seed: Int) : CardFace(context) {
-    override fun scene(canvas: Canvas, w: Float, h: Float) {
-        val random = Random(seed)
-        fun between(from: Float, to: Float) = from + random.nextFloat() * (to - from)
-
-        val horizon = h * 0.42f
-        val foot = h * 0.72f
-        val haze = c(Color.rgb(0xEE, 0xF0, 0xEA))
-        fun fill(top: Float, bottom: Float, from: Int, to: Int) {
-            paint.shader = LinearGradient(0f, top, 0f, bottom, c(from), to, Shader.TileMode.CLAMP)
-        }
-
-        // Sky, and the light coming over the range.
-        fill(0f, horizon, Color.rgb(0x9F, 0xBD, 0xCE), haze)
-        canvas.drawRect(0f, 0f, w, foot, paint)
-        paint.shader = RadialGradient(w * between(0.6f, 0.9f), h * 0.1f, w * 0.22f,
-            c(Color.argb(0x66, 0xFF, 0xFB, 0xEE)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
-        canvas.drawRect(0f, 0f, w, foot, paint)
-
-        // Two ranges, the far one paler: each ridge a run of peaks smoothed through their midpoints.
-        fun range(base: Float, highest: Float, peaks: Int, colour: Int) {
-            path.reset()
-            path.moveTo(0f, base)
-            var x = 0f
-            var y = between(highest, base)
-            path.lineTo(0f, y)
-            for (i in 1..peaks) {
-                val nx = w * i / peaks
-                val ny = between(highest, base - (base - highest) * 0.25f)
-                path.quadTo(x, y, (x + nx) / 2, (y + ny) / 2)
-                x = nx; y = ny
-            }
-            path.lineTo(w, y)
-            path.lineTo(w, base)
-            path.close()
-            fill(highest, base, colour, blend(c(colour), haze, 0.55f))
-            canvas.drawPath(path, paint)
-        }
-        range(horizon + h * 0.04f, h * 0.10f, 5, Color.rgb(0x86, 0x9E, 0xAE))
-        range(horizon + h * 0.08f, h * 0.22f, 4, Color.rgb(0x5F, 0x80, 0x6B))
-
-        // The valley floor, and the river coming out of it toward us, widening.
-        fill(horizon, foot, Color.rgb(0x86, 0xA0, 0x74), SURFACE)
-        canvas.drawRect(0f, horizon + h * 0.06f, w, foot, paint)
-        val source = w * between(0.45f, 0.75f)
-        val mouth = w * between(0.2f, 0.6f)
-        val top = horizon + h * 0.06f
-        path.reset()
-        path.moveTo(source - w * 0.01f, top)
-        path.cubicTo(source - w * 0.12f, top + h * 0.08f, mouth + w * 0.15f, foot - h * 0.12f, mouth - w * 0.14f, foot)
-        path.lineTo(mouth + w * 0.14f, foot)
-        path.cubicTo(mouth + w * 0.25f, foot - h * 0.12f, source - w * 0.02f, top + h * 0.08f, source + w * 0.01f, top)
-        path.close()
-        fill(top, foot, Color.rgb(0xB2, 0xD0, 0xDE), SURFACE)
-        canvas.drawPath(path, paint)
-
-        // A hill in front, off to one side, so the river has a bank to come round.
-        val left = random.nextBoolean()
-        path.reset()
-        path.moveTo(if (left) 0f else w, foot)
-        path.lineTo(if (left) 0f else w, horizon + h * 0.02f)
-        path.cubicTo(w * (if (left) 0.18f else 0.82f), horizon, w * (if (left) 0.3f else 0.7f), horizon + h * 0.12f,
-            w * (if (left) 0.46f else 0.54f), foot)
-        path.close()
-        fill(horizon, foot, Color.rgb(0x4E, 0x72, 0x4A), SURFACE)
-        canvas.drawPath(path, paint)
-
-        fade(canvas, w, h * 0.52f, foot)
-    }
-}
 
 /**
  * A device card's face: the thing's own light, pooled at the top of the card and fading into it --
@@ -219,8 +138,8 @@ internal abstract class CardFace(protected val context: Context) : Drawable() {
  * dragging anywhere around it moves the needle, and letting go is what sends the new target -- a
  * drag is a dozen values on the way to one, and the house only needs to hear the last.
  *
- * The dial's colour follows the mode: cool is blue-grey, heat is warm, anything else is the sage of
- * a unit that is merely on, and off is the paper. That is the state readable from across the room.
+ * The selected mode wears the yellow accent. A running unit has a warm paper dial and yellow
+ * rim; off returns to plain paper. The mode's name carries the distinction between heat and cool.
  */
 @SuppressLint("ViewConstructor") // Created with device data in code, never inflated from XML.
 internal class ClimateDial(
@@ -283,7 +202,6 @@ internal class ClimateDial(
     private fun drawFan(canvas: Canvas) {
         if (modes.isEmpty()) return
         val each = span / modes.size
-        val (deep, light) = modeTones(mode)
         modes.forEachIndexed { index, it ->
             val on = it == mode
             val from = -span / 2 + index * each + 1.2f
@@ -296,14 +214,17 @@ internal class ClimateDial(
             oval.set(cx - inner, cy - inner, cx + inner, cy + inner)
             path.arcTo(oval, from - 90f + sweep, -sweep)
             path.close()
-            segment.color = if (on) deep else light
-            if (index == pressedMode && !on) segment.color = blend(light, deep, 0.5f)
+            segment.color = when {
+                on -> ACCENT
+                index == pressedMode -> SURFACE_ON
+                else -> SURFACE
+            }
             canvas.drawPath(path, segment)
 
             val middle = Math.toRadians((from + sweep / 2).toDouble())
             val at = inner + (outer - inner) / 2
             label.textSize = thickness * if (modes.size > 5) 0.34f else 0.40f
-            label.color = if (on) DIAL_TYPE else MUTED
+            label.color = if (on) ON_ACCENT else MUTED
             label.typeface = if (on) DISPLAY else null
             canvas.drawText(
                 modeLabel(it),
@@ -315,17 +236,20 @@ internal class ClimateDial(
     }
 
     private fun drawDial(canvas: Canvas) {
-        val (deep, light) = modeTones(mode)
-        fill.shader = LinearGradient(0f, cy - radius, 0f, cy + radius, deep, light, Shader.TileMode.CLAMP)
+        val running = mode != "off" && mode != "unknown" && mode != "unavailable"
+        fill.color = if (running) SURFACE_ON else SURFACE
         canvas.drawCircle(cx, cy, radius, fill)
+        line.color = if (running) ACCENT else HAIRLINE_STRONG
+        line.strokeWidth = context.dp(2).toFloat()
+        canvas.drawCircle(cx, cy, radius - line.strokeWidth / 2, line)
 
         // The ring of ticks just inside the edge.
-        line.color = Color.argb(0x55, 0x16, 0x15, 0x12)
         line.strokeWidth = context.dp(1).toFloat()
         val outer = radius - context.dp(12)
         for (tick in 0 until 120) {
             val angle = Math.toRadians(tick * 3.0)
             val inner = outer - context.dp(if (tick % 10 == 0) 7 else 3)
+            line.color = if (tick % 10 == 0) MUTED else HAIRLINE_STRONG
             canvas.drawLine(
                 cx + sin(angle).toFloat() * inner, cy - cos(angle).toFloat() * inner,
                 cx + sin(angle).toFloat() * outer, cy - cos(angle).toFloat() * outer, line,
@@ -336,8 +260,7 @@ internal class ClimateDial(
         val shown = dragging ?: value
         if (shown != null && min != null && max != null && max > min) {
             val angle = Math.toRadians(((shown - min) / (max - min) * 2 - 1) * SWEEP)
-            line.color = DIAL_TYPE
-            if (dragging != null) line.color = Color.rgb(0x8F, 0x6B, 0x00)
+            line.color = if (running || dragging != null) ACCENT_INK else TEXT
             line.strokeWidth = context.dp(if (dragging != null) 3 else 2).toFloat()
             val from = outer - context.dp(10)
             val to = radius * 0.42f
@@ -351,7 +274,7 @@ internal class ClimateDial(
         label.color = MUTED
         label.textSize = radius * 0.075f
         canvas.drawText(caption, cx, cy + radius * 0.02f, label)
-        label.color = DIAL_TYPE
+        label.color = TEXT
         label.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
         label.textSize = radius * 0.30f
         val number = shown?.let {
@@ -412,8 +335,6 @@ internal class ClimateDial(
         const val SWEEP = 135.0
         /** gap + thickness + raise, as a fraction of the radius. */
         const val FAN = 0.47f
-        /** Type on the dial: the dial is pale by day and by night, so this does not turn over. */
-        val DIAL_TYPE = Color.rgb(0x16, 0x15, 0x12)
     }
 }
 

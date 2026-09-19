@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.media.AudioManager
 import android.os.Bundle
@@ -28,6 +29,7 @@ private const val PAGES = 3
 private const val HOUSE = 2
 /** What the model calls each page, in the pager's order. */
 private val PAGE_NAMES = listOf("clock", "weather", "house")
+private const val MINUTE = 60_000L
 
 class MainActivity : Activity(), Conversation.Ui {
     private lateinit var settings: Settings
@@ -48,7 +50,20 @@ class MainActivity : Activity(), Conversation.Ui {
     /** Whether this screen was built with the night palette; see [turnOver]. */
     private var builtNight = false
     private val turnOver = Runnable { turnOverIfDue() }
-    private val wake by lazy { WakeWord(this, settings) { said -> startConversation(calledByName = true, said = said) } }
+    /** The black sheet over a screen nobody is standing at, and whether it is down; see [stirred]. */
+    private lateinit var blackout: View
+    private var dark = false
+    /** Set while the touch that woke the screen is still going, so it presses nothing on the way out. */
+    private var swallowing = false
+    private val goDark = Runnable { goDarkIfDue() }
+    private val wake by lazy {
+        WakeWord(
+            this,
+            settings,
+            onHeard = { said -> startConversation(calledByName = true, said = said) },
+            onSound = { stirred() },
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -88,6 +103,10 @@ class MainActivity : Activity(), Conversation.Ui {
         housePage.bind()
         calendarPage = CalendarPage(this)
         sky = SkyView(this)
+        blackout = View(this).apply {
+            setBackgroundColor(Color.BLACK)
+            visibility = View.GONE
+        }
         dots = TextView(this).apply {
             setTextColor(MUTED)
             textSize = 10f
@@ -141,8 +160,53 @@ class MainActivity : Activity(), Conversation.Ui {
                         .apply { leftMargin = dp(16); bottomMargin = dp(16) },
                 )
                 addView(captions)
+                // Over everything, including the buttons: when it is down there is nothing to press.
+                addView(blackout)
             }
         )
+        stirred()
+    }
+
+    /**
+     * Something happened in the room, so the screen is lit and the clock starts again.
+     *
+     * Called from every sign of life this device can actually see: a touch, a voice the wake word
+     * listener's VAD picked up, a conversation, a bell. There is no presence sensor on this hardware
+     * -- one light sensor, and the ultrasound the real Echo Show used went with its firmware -- so
+     * "somebody is there" is the sum of those or nothing at all.
+     */
+    private fun stirred() {
+        val decor = window.decorView
+        decor.removeCallbacks(goDark)
+        setDark(false)
+        // Read every time: the wait may have just been changed in Settings, and 0 means never.
+        val after = settings.dimAfter
+        if (after > 0) decor.postDelayed(goDark, after * 60_000L)
+    }
+
+    private fun goDarkIfDue() {
+        // Talking, or a bell still ringing, is somebody there whether or not they move.
+        if (conversation?.active == true || Timers.ringing) {
+            window.decorView.postDelayed(goDark, MINUTE)
+            return
+        }
+        setDark(true)
+    }
+
+    /**
+     * The backlight down and a black sheet over the wall, or both back.
+     *
+     * The screen is only darkened, never turned off: letting it go would pause this activity, which
+     * takes the microphone down with it, and then nothing could hear the name that would bring it
+     * back. `screenBrightness` leaves the app running and the microphone open.
+     */
+    private fun setDark(on: Boolean) {
+        if (dark == on) return
+        dark = on
+        blackout.visibility = if (on) View.VISIBLE else View.GONE
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (on) 0f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        }
     }
 
     /**
@@ -171,11 +235,11 @@ class MainActivity : Activity(), Conversation.Ui {
         return SkyScene.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
     }
 
-    /** Page indicator: the page you are on is the one wearing the accent. */
+    /** Page indicator: the page you are on is the one set in ink. */
     private fun showDots(current: Int) {
         val text = SpannableString((0 until PAGES).joinToString("  ") { "●" })
         val at = current * 3
-        text.setSpan(ForegroundColorSpan(ACCENT_INK), at, at + 1, 0)
+        text.setSpan(ForegroundColorSpan(TEXT), at, at + 1, 0)
         text.setSpan(ForegroundColorSpan(MUTED), 0, at, 0)
         text.setSpan(ForegroundColorSpan(MUTED), at + 1, text.length, 0)
         dots.text = text
@@ -253,6 +317,10 @@ class MainActivity : Activity(), Conversation.Ui {
         super.onResume()
         // The hour may have crossed dusk or dawn while the screen was away or asleep.
         turnOverIfDue()
+        // Coming back from Settings is somebody standing there, and the wait may have changed there.
+        stirred()
+        // A timer going off on a dark screen should be a lit one by the time anyone looks.
+        Timers.onRing = { stirred() }
         // Settings may have changed the key or the cap, and the spend line is stale after a session.
         spend.text = Usage(this).label()
         // Settings may also have renamed Hachi or switched being called by name on or off.
@@ -273,6 +341,10 @@ class MainActivity : Activity(), Conversation.Ui {
     override fun onPause() {
         super.onPause()
         window.decorView.removeCallbacks(turnOver)
+        window.decorView.removeCallbacks(goDark)
+        Timers.onRing = null
+        // Settings must not open onto a screen this one had turned down.
+        setDark(false)
         // A conversation cut short by the screen going elsewhere looks exactly like one the server
         // dropped, unless this says which it was.
         if (conversation?.active == true) android.util.Log.i("Hachi", "paused while talking")
@@ -300,6 +372,8 @@ class MainActivity : Activity(), Conversation.Ui {
                 spend.text = Usage(this).label()
                 // The microphone is free again, so go back to waiting for the name.
                 listenForName()
+                // The wait to go dark starts from the end of the conversation, not its beginning.
+                stirred()
             }
         }
     }
@@ -308,8 +382,20 @@ class MainActivity : Activity(), Conversation.Ui {
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.action == MotionEvent.ACTION_DOWN && Timers.ringing) {
             Timers.silence()
+            stirred()
             return true
         }
+        // The touch that wakes a dark screen only wakes it: the whole gesture is swallowed so a
+        // hand reaching for the wall does not also swipe a page or press the talk button.
+        if (dark) swallowing = true
+        if (swallowing) {
+            if (event.action == MotionEvent.ACTION_DOWN) stirred()
+            if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
+                swallowing = false
+            }
+            return true
+        }
+        if (event.action == MotionEvent.ACTION_DOWN) stirred()
         return super.dispatchTouchEvent(event)
     }
 

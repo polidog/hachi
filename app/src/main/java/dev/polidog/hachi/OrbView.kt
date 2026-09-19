@@ -107,7 +107,8 @@ class OrbView(context: Context) : View(context) {
         // High and small enough that the captions underneath keep their own room; the view itself
         // is the whole overlay, because the glow has to be allowed to spill past the sphere.
         val cy = height * 0.34f
-        val r = min(height * 0.26f, width * 0.20f) * (1f + 0.035f * sin(t * 1.1f))
+        val still = min(height * 0.26f, width * 0.20f)
+        val r = still * (1f + 0.035f * sin(t * 1.1f))
         if (r <= 0f) return
 
         val filter = tint(hue(t))
@@ -137,10 +138,11 @@ class OrbView(context: Context) : View(context) {
         }
         canvas.restore()
 
-        // The lit edge of the reference: one arc low on the left, drifting a little.
-        if (blurred != r) {
-            rim.maskFilter = BlurMaskFilter(r * 0.10f, BlurMaskFilter.Blur.NORMAL)
-            blurred = r
+        // The lit edge of the reference: one arc low on the left, drifting a little. The blur is
+        // sized off the still radius: keyed on the breathing one it was rebuilt every frame.
+        if (blurred != still) {
+            rim.maskFilter = BlurMaskFilter(still * 0.10f, BlurMaskFilter.Blur.NORMAL)
+            blurred = still
         }
         rim.strokeWidth = r * 0.07f
         canvas.drawArc(cx - r, cy - r, cx + r, cy + r, 112f + 14f * sin(t * 0.5f), 96f, false, rim)

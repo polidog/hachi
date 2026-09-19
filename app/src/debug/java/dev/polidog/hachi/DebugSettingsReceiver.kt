@@ -55,7 +55,7 @@ class DebugSettingsReceiver : BroadcastReceiver() {
             "model", "voice", "silenceTimeout", "dailyCap",
             "weatherPlace", "weatherLat", "weatherLon",
             "homeAssistantUrl", "immichUrl", "immichAlbum", "debugScene", "radarZoom",
-            "assistantName", "userName", "wakeLevel",
+            "assistantName", "userName", "wakeLevel", "dimAfter",
         )
         val FLAGS = setOf("wakeEnabled")
     }

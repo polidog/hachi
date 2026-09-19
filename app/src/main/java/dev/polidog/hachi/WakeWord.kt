@@ -45,6 +45,14 @@ class WakeWord(
     private val settings: Settings,
     /** Called with what was said after the name in the same breath, as 16 kHz PCM16, or null if nothing was. */
     private val onHeard: (ByteArray?) -> Unit,
+    /**
+     * Called on the main thread whenever a voice is heard in the room, name or not.
+     *
+     * The VAD is already cutting the microphone into spans of speech to feed Julius, so a span
+     * starting is a free "somebody is there" -- the closest thing this device has to a presence
+     * sensor. Only ever a hint: a television says it too.
+     */
+    private val onSound: () -> Unit = {},
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val binary = File(context.applicationInfo.nativeLibraryDir, EXECUTABLE)
@@ -116,10 +124,15 @@ class WakeWord(
             Log.i(TAG, "listening for \"$word\"")
             val buffer = ShortArray(CHUNK)
             var chunks = 0
+            var spans = 0
             while (!stopped) {
                 val count = mic.read(buffer, 0, buffer.size)
                 if (count <= 0) break
                 if (stopped) break
+                if (julius.segments != spans) {
+                    spans = julius.segments
+                    main.post { if (!stopped) onSound() }
+                }
                 // A microphone delivering zeros and one delivering a voice look identical from
                 // Julius's silence, and a threshold set too high looks like both. Once a second,
                 // say what actually arrived and whether any of it was loud enough to send on.
@@ -193,6 +206,9 @@ private class Julius(context: Context, word: String, dict: String, rmsThreshold:
         onSegmentEnd = { lastSegment = segment.toByteArray(); flush(); sendEnd() },
         rmsThreshold = rmsThreshold,
     )
+
+    /** Spans of speech the VAD has cut since this listener started; see WakeWord's `onSound`. */
+    val segments get() = vad.segments
 
     /** What the microphone has been delivering, against the level a frame has to reach to be sent on. */
     fun logLevel() {
