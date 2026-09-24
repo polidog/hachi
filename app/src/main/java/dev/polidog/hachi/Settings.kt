@@ -118,6 +118,18 @@ class Settings(context: Context) {
      */
     val dimAfter get() = get("dimAfter", "5").toLongOrNull()?.coerceIn(0, 240) ?: 5L
 
+    /**
+     * How loud a moment has to be to count as somebody being in the room, on [wakeLevel]'s scale.
+     *
+     * A second calibration knob, and a much higher bar than [wakeLevel] is: that one is set low
+     * because a wrong guess only costs some decoding, but at that height a fridge, a road and a
+     * television next door all read as company and the screen never goes dark. Measured in this
+     * room: quiet ten-second windows peak around 19 and loud ones around 315, so the default sits
+     * above anything that is not a voice near the wall. Tune it against the level line WakeWord
+     * logs -- too high and the screen dims with someone standing right there.
+     */
+    val nearLevel get() = get("nearLevel", "400").toDoubleOrNull()?.coerceIn(80.0, 20000.0) ?: 400.0
+
     /** Whether saying [assistantName] out loud starts a conversation. */
     var wakeEnabled: Boolean
         get() = flag("wakeEnabled")

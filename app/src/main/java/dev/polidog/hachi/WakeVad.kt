@@ -54,6 +54,14 @@ class WakeVad(
     var loudestFrame = 0.0
     var segments = 0
 
+    /**
+     * The same measurement as [loudestFrame] on its own counter, because they are read on different
+     * clocks: [loudestFrame] is reset by the once-every-ten-seconds log line, and this one by
+     * whoever is watching the room for somebody being in it. One resetting the other's value would
+     * leave that reader seeing silence.
+     */
+    var loudestSinceAsked = 0.0
+
     companion object {
         const val SAMPLE_RATE = 16000
         const val FRAME_SAMPLES = SAMPLE_RATE / 100 // 10ms
@@ -114,6 +122,7 @@ class WakeVad(
     private fun processFrame() {
         val level = rms()
         if (level > loudestFrame) loudestFrame = level
+        if (level > loudestSinceAsked) loudestSinceAsked = level
         val active = level >= rmsThreshold
         if (!inSpeech) {
             if (active) {

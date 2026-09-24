@@ -46,11 +46,11 @@ class WakeWord(
     /** Called with what was said after the name in the same breath, as 16 kHz PCM16, or null if nothing was. */
     private val onHeard: (ByteArray?) -> Unit,
     /**
-     * Called on the main thread whenever a voice is heard in the room, name or not.
+     * Called on the main thread, at most once a second, while the room is loud enough to have
+     * somebody in it -- `nearLevel`, not the much lower level the wake word decodes at.
      *
-     * The VAD is already cutting the microphone into spans of speech to feed Julius, so a span
-     * starting is a free "somebody is there" -- the closest thing this device has to a presence
-     * sensor. Only ever a hint: a television says it too.
+     * The microphone is open for the name anyway, so this is the closest thing this device has to a
+     * presence sensor and it costs nothing. Only ever a hint: a television says it too.
      */
     private val onSound: () -> Unit = {},
 ) {
@@ -110,6 +110,7 @@ class WakeWord(
         var mic: AudioRecord? = null
         try {
             julius = Julius(context, word, dict, settings.wakeLevel)
+            val near = settings.nearLevel
             val min = AudioRecord.getMinBufferSize(MIC_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             check(min > 0) { "AudioRecord reported no usable buffer size" }
             mic = AudioRecord(
@@ -121,18 +122,17 @@ class WakeWord(
             )
             check(mic.state == AudioRecord.STATE_INITIALIZED) { "AudioRecord did not initialize" }
             mic.startRecording()
-            Log.i(TAG, "listening for \"$word\"")
+            Log.i(TAG, "listening for \"$word\"; somebody in the room from ${near.toInt()}")
             val buffer = ShortArray(CHUNK)
             var chunks = 0
-            var spans = 0
             while (!stopped) {
                 val count = mic.read(buffer, 0, buffer.size)
                 if (count <= 0) break
                 if (stopped) break
-                if (julius.segments != spans) {
-                    spans = julius.segments
-                    main.post { if (!stopped) onSound() }
-                }
+                // Once a second: a room has somebody in it or it does not, and that does not change
+                // in 100 ms. Loudness, not the VAD's spans -- the level a span is cut at is set low
+                // on purpose, so in a real room spans never stop and everything looks occupied.
+                if (chunks % 10 == 0 && julius.loudestSince() >= near) main.post { if (!stopped) onSound() }
                 // A microphone delivering zeros and one delivering a voice look identical from
                 // Julius's silence, and a threshold set too high looks like both. Once a second,
                 // say what actually arrived and whether any of it was loud enough to send on.
@@ -207,8 +207,12 @@ private class Julius(context: Context, word: String, dict: String, rmsThreshold:
         rmsThreshold = rmsThreshold,
     )
 
-    /** Spans of speech the VAD has cut since this listener started; see WakeWord's `onSound`. */
-    val segments get() = vad.segments
+    /** The loudest frame since this was last called, and zero from here until the next one. */
+    fun loudestSince(): Double {
+        val loudest = vad.loudestSinceAsked
+        vad.loudestSinceAsked = 0.0
+        return loudest
+    }
 
     /** What the microphone has been delivering, against the level a frame has to reach to be sent on. */
     fun logLevel() {

@@ -356,6 +356,8 @@ class MainActivity : Activity(), Conversation.Ui {
     override fun onState(state: Conversation.State) {
         when (state) {
             Conversation.State.CONNECTING -> {
+                // Being talked to is somebody there whatever the room's level said.
+                stirred()
                 captions.show(getString(R.string.state_connecting))
                 talking = true
                 bindButtons()
