@@ -35,7 +35,7 @@ class MainActivity : Activity(), Conversation.Ui {
     private lateinit var settings: Settings
     private lateinit var captions: ConversationView
     private lateinit var spend: TextView
-    private lateinit var talk: View
+    private lateinit var talk: ImageView
     /** Set while a conversation is running: the buttons are gone for its whole length. */
     private var talking = false
     private lateinit var dots: TextView
@@ -256,15 +256,19 @@ class MainActivity : Activity(), Conversation.Ui {
         setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
     }
 
+    /** Switches the voice assistant -- being called by name -- on and off. [listenForName] draws it. */
     private fun talkButton() = ImageView(this).apply {
-        setImageResource(R.drawable.ic_mic)
         val pad = dp(16)
         setPadding(pad, pad, pad, pad)
-        imageTintList = ColorStateList.valueOf(ON_ACCENT)
-        // The one thing on the screen wearing the accent: the button worth pressing.
-        background = pill(dp(28).toFloat(), fill = ACCENT)
-        contentDescription = getString(R.string.action_talk)
-        setOnClickListener { startConversation() }
+        setOnClickListener {
+            settings.wakeEnabled = !settings.wakeEnabled
+            if (settings.wakeEnabled && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                // The calendar rides along with the microphone: both are asked for while someone is
+                // standing at the screen.
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_CALENDAR), 1)
+            }
+            listenForName()
+        }
     }
 
     /**
@@ -282,15 +286,8 @@ class MainActivity : Activity(), Conversation.Ui {
         // Being called by name over the bell is how it is answered.
         Timers.silence()
         if (conversation?.active == true) return
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            // The calendar rides along with the microphone: both are asked for while someone is
-            // standing at the screen, and the conversation only waits on the microphone.
-            requestPermissions(
-                arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_CALENDAR),
-                1,
-            )
-            return
-        }
+        // Only the name starts one, and the name is only listened for with the microphone allowed.
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
         // Both want the one microphone, and Julius holds it until it is told not to.
         wake.stop()
         conversation = Conversation(this, settings, this).also { it.start(greet = calledByName, said = said) }
@@ -300,17 +297,22 @@ class MainActivity : Activity(), Conversation.Ui {
      * Listens for the name, if that is switched on and there is a microphone to listen with.
      *
      * Permission is never asked for here: being woken by name is not worth a dialog on a screen
-     * nobody is standing at. The talk button asks, and from then on this works too.
+     * nobody is standing at. The talk button asks when it is switched on.
      */
     private fun listenForName() {
         val name = settings.assistantName
         val on = settings.wakeEnabled &&
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (on) wake.start(name) else wake.stop()
+        // The button shows whether it is actually listening, not just whether it was asked to.
+        talk.setImageResource(if (on) R.drawable.ic_mic else R.drawable.ic_mic_off)
+        talk.imageTintList = ColorStateList.valueOf(if (on) ON_ACCENT else MUTED)
+        talk.background = if (on) pill(dp(28).toFloat(), fill = ACCENT) else card(radius = 28)
+        talk.contentDescription = getString(if (on) R.string.action_assistant_off else R.string.action_assistant_on)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) startConversation()
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) listenForName()
     }
 
     override fun onResume() {
